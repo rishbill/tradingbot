@@ -3,7 +3,7 @@
 
 from AlgorithmImports import *
 
-class StockTradingAlgorithm(CodysAdvancedStrategy):
+class CodysAdvancedStrategy(QCAlgorithm):
     def Initialize(self):
         try:
             self.SetStartDate(2024, 1, 1)  # Set Start Date
@@ -95,13 +95,15 @@ class StockTradingAlgorithm(CodysAdvancedStrategy):
             # 1st-stage coarse stock filter based on fundamental data availability, min price, and max price
             self.Debug(f"1st-Stage Filter - Price:\n    HasFundamentalData: true\n    Min Stock Price: {self.min_stock_price}\n    Max Stock Price: {self.max_stock_price}")
             price_filtered_stocks = [c for c in coarse if c.HasFundamentalData and self.min_stock_price <= c.Price < self.max_stock_price]
-            self.Debug(f"        Price-filtered stocks count: {len(price_filtered_stocks)}")
+            sorted_by_volume = sorted(price_filtered_stocks, key=lambda x: x.Volume, reverse=True) # Sort stocks by volume
+            top_volume_stocks = sorted_by_volume[:100] # Return top 100 stocks
+            self.Debug(f"        Price-filtered stocks count: {len(top_volume_stocks)}")
 
             # 2nd-stage coarse stock filter based on fundamentals
             self.Debug(f"2nd-Stage Filter - Fundamentals:\n    Min P/E Ratio: {self.min_pe_ratio}\n    Max P/E Ratio: {self.max_pe_ratio}\n    Min Revenue Growth: {self.min_revenue_growth}")
-            for stock_to_filter in price_filtered_stocks: # Iterate through the initial filtered stocks
+            for stock_to_filter in top_volume_stocks: # Iterate through the initial filtered stocks
                 if self.UniverseFilter_Fundamentals(stock_to_filter): # Return true/false if stock meets Fundamentals criteria
-                    self.fundamentals_filtered_stocks.append(stock_to_filter.Symbol) # Add the stock to the list if true
+                    fundamentals_filtered_stocks.append(stock_to_filter.Symbol) # Add the stock to the list if true
             self.Debug(f"        Fundamentals-filtered stocks count: {len(fundamentals_filtered_stocks)}")
 
             # 3rd-stage coarse diversification filter for minimum stock and sector requirements
@@ -117,8 +119,8 @@ class StockTradingAlgorithm(CodysAdvancedStrategy):
     def UniverseFilter_Fundamentals(self, stock_to_filter):
     # Filters a provided stock by fundamentals criteria
         try:
-            pe_ratio = stock_to_filter.Fundamentals.ValuationRatios.PERatio # Gets the Price-Earnings ratio for this stock 
-            revenue_growth = stock_to_filter.Fundamentals.OperationRatios.RevenueGrowth.OneYear # Get the Revenue Growth for this stock
+            pe_ratio = stock_to_filter.ValuationRatios.PERatio # Gets the Price-Earnings ratio for this stock 
+            revenue_growth = stock_to_filter.OperationRatios.RevenueGrowth.OneYear # Get the Revenue Growth for this stock
 
             # Return true/false if stock is within Profit-Earnings Ratio range, and minimum Revenue Growth
             return pe_ratio > self.min_pe_ratio and pe_ratio < self.max_pe_ratio and revenue_growth > self.min_revenue_growth
@@ -156,9 +158,11 @@ class StockTradingAlgorithm(CodysAdvancedStrategy):
                             continue # Move to the next stock
 
                 # 3rd-stage Diversification filter for minimum total stocks in the biggest sector
-                if sector == biggest_sector and stock_counts_per_sector.get(biggest_sector, 0) < self.min_portfolio_stocks_per_biggest_sector: # If this sector is the biggest in portfolio, and sector has less than minimum stocks per sector
-                    stock_counts_per_sector[biggest_sector] += 1 # Increment number of stocks in biggest sector
-                    diversification_filtered_stocks.append(stock) # Add stock to the list
+                if sector == biggest_sector: # If this sector is the biggest in portfolio
+                    stock_counts_per_sector.setdefault(biggest_sector, 0) # Ensure biggest_sector is initialized
+                    if stock_counts_per_sector[biggest_sector] < self.min_portfolio_stocks_per_biggest_sector: # If this sector is the biggest in portfolio, and sector has less than minimum stocks per sector
+                        stock_counts_per_sector[biggest_sector] += 1 # Increment number of stocks in biggest sector
+                        diversification_filtered_stocks.append(stock) # Add stock to the list
 
             # Return the final list of diversification-filtered stocks
             return set(diversification_filtered_stocks)
