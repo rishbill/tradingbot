@@ -5,87 +5,112 @@ from AlgorithmImports import *
 
 class CodysAdvancedStrategy(QCAlgorithm):
     def Initialize(self):
+        # Basic variables
         try:
+            self.Debug("Initializing basic variables...")
             self.SetStartDate(2024, 1, 1)  # Set Start Date
-            self.SetCash(1000)  # Set Strategy Cash
-            self.MaxPortfolioDrawdown = 0.20  # Maximum allowable drawdown
+            # self.SetEndDate(2024, 1, 1)  # Set End Date -- Default is present
+            self.SetCash(1000)  # Set Strategy Starting Capital
             self.total_portfolio_value = self.Portfolio.TotalPortfolioValue
-            self.Debug(f"Current Portfolio Value: {self.total_portfolio_value}")
-            self.Debug("Successfully initialized basic parameters")
+            self.Debug("    Successfully initialized basic parameters:")
+            self.Debug(f"        Initial Capital: ${self.Portfolio.Cash}")
+            self.Debug(f"        Start Date: {self.StartDate}")
+            self.Debug(f"        End Date: {self.EndDate}")
         except Exception as e:
-            self.Debug(f"Error initializing basic parameters: {str(e)}")
+            self.Error(f"Error initializing basic variables: {str(e)}")
 
-        # Variables
+        # Portfolio Summary
+        try:
+            self.Debug("Portfolio Summary:")
+            # Portfolio Value
+            portfolio_value = self.Portfolio.TotalPortfolioValue
+            self.Debug(f"    Portfolio Value: ${portfolio_value}")
+
+            # Stock counts and percentages per sector
+            stock_counts_per_sector = self.CalculateStockCountsPerSector()
+            total_invested_stocks = sum(stock_counts_per_sector.values())
+            
+            if total_invested_stocks == 0:
+                self.Debug("    No invested stocks in portfolio.")
+
+            self.Debug("    Stock Counts and Percentages per Sector:")
+            for sector, count in stock_counts_per_sector.items():
+                sector_value = self.CalculateSectorPortfolioValue(sector)
+                percentage_of_portfolio = (sector_value / portfolio_value) * 100
+                self.Debug(f"        Sector: {sector}, Count: {count}, Value: ${sector_value}, Percentage of Portfolio: {percentage_of_portfolio:.2f}%")
+
+        except Exception as e:
+            self.Error(f"Error in PortfolioSummary: {str(e)}")
+
+        # # Trading indicators and variables
+        # try:    
+        #     self.Debug("Initializing Trading indicators and variables...")
+        #     # Indicators
+        #     self.emaShort = {}
+        #     self.emaLong = {}
+        #     self.atr = {}
+        #     self.stochRsi = {}
+
+        #     # News and Sentiment
+        #     self.news_feed = {}
+
+        #     # P/L Calculations
+        #     self.win_count = 0
+        #     self.loss_count = 0
+        #     self.total_profit = 0
+        #     self.total_loss = 0
+
+        #     # Orders
+        #     self.trailingStopLoss = 0.05  # 5% trailing stop
+        #     self.trailingStopPrice = {}
+
+        #     self.Debug("    Successfully initialized trading variables")
+
+        # except Exception as e:
+        #     self.Error(f"Error initializing Trading variables: {str(e)}")        
+
         # Universe Filtering
         try:
-            self.max_stock_price = self.Portfolio.TotalPortfolioValue * 0.10 # Limit max stock price to 10% of portfolio size, for affordability
-            self.min_stock_price = 1.00 # Require the min stock price to $1.00 to limit risk
+            self.Debug("Initializing Universe filter variables...")
+            # Fundamentals criteria
+            self.max_stock_price = self.Portfolio.TotalPortfolioValue * 0.10 # Limit max stock price to X% of portfolio size, for affordability
+            self.min_stock_price = 1.00 # Require the min stock price to limit risk
             self.min_pe_ratio = 0 # Require stock to have positive earnings
             self.max_pe_ratio = 20 # Require stock to not be overvalued
             self.min_revenue_growth = 0 # Require stock to have positive Revenue Growth  
+            
+            # Portfolio diversification criteria
             self.min_total_portfolio_stocks = 5 # Require at least 5 stocks for whole portfolio 
             self.min_portfolio_sectors = 3 # Require at least 3 sectors for whole portfolio            
             self.max_portfolio_exposure_per_biggest_sector = 0.65 # Require biggest portfolio sector to be < 65% of whole portfolio value
             self.min_portfolio_stocks_per_biggest_sector = 5 # Require at least 5 stocks in biggest sector
             self.max_portfolio_invested = 0.9 # Maximum total portfolio value invested in stocks 
             self.blocked_countries = [
-                "BY",  # Belarus
-                "BI",  # Burundi
-                "CF",  # Central African Republic
-                "CU",  # Cuba
-                "CD",  # Democratic Republic of the Congo
-                "IR",  # Iran
-                "IQ",  # Iraq
-                "LB",  # Lebanon
-                "LY",  # Libya
-                "ML",  # Mali
-                "NI",  # Nicaragua
-                "KP",  # North Korea
-                "RU",  # Russia
-                "SO",  # Somalia
-                "SS",  # South Sudan
-                "SD",  # Sudan
-                "SY",  # Syria
-                "UA",  # Ukraine
-                "VE",  # Venezuela
-                "YE",  # Yemen
-                "ZW",  # Zimbabwe
-                "CN"   # China
+                # List of country codes for countries to be excluded
+                "BY", "BI", "CF", "CU", "CD", "IR", "IQ", "LB", "LY", "ML", "NI",
+                "KP", "RU", "SO", "SS", "SD", "SY", "UA", "VE", "YE", "ZW", "CN"
             ]
-            self.Debug("Successfully set Universe selection parameters")
+
+            self.Debug("    Successfully set Universe selection variables:")
+            self.Debug(f"       Max stock price: ${self.max_stock_price}")
+            self.Debug(f"       Min stock price: ${self.min_stock_price}")
+            self.Debug(f"       P/E ratio range: {self.min_pe_ratio} to {self.max_pe_ratio}")
+            self.Debug(f"       Min revenue growth: {self.min_revenue_growth}")
+            self.Debug(f"       Min total portfolio stocks: {self.min_total_portfolio_stocks}")
+            self.Debug(f"       Min portfolio sectors: {self.min_portfolio_sectors}")
+            self.Debug(f"       Max exposure per biggest sector: {self.max_portfolio_exposure_per_biggest_sector * 100}%")
+            self.Debug(f"       Min stocks per biggest sector: {self.min_portfolio_stocks_per_biggest_sector}")
+            self.Debug(f"       Max invested percentage: {self.max_portfolio_invested * 100}%")
+            self.Debug(f"       Blocked countries: {', '.join(self.blocked_countries)}")
         except Exception as e:
-            self.Debug(f"Error setting Universe selection parameters: {str(e)}")
+            self.Error(f"Error setting Universe selection variables: {str(e)}")
 
         try:
+            self.Debug("Filtering Universe...")
             self.UniverseSettings.Resolution = Resolution.Daily
             self.AddUniverse(self.UniverseFilter, self.UniverseFilter_Countries)  # Get the stocks for today's potential trades
         except Exception as e:
-            self.Debug(f"Error Adding Universe: {str(e)}")            
-
-        try:
-            # Indicators
-            self.emaShort = {}
-            self.emaLong = {}
-            self.atr = {}
-            self.stochRsi = {}
-
-            # News and Sentiment
-            self.news_feed = {}
-
-            # P/L Calculations
-            self.win_count = 0
-            self.loss_count = 0
-            self.total_profit = 0
-            self.total_loss = 0
-
-            # Orders
-            self.trailingStopLoss = 0.05  # 5% trailing stop
-            self.trailingStopPrice = {}
-            self.stockSymbols = []  # List to keep track of selected symbols
-
-            self.Debug("Successfully set Trading parameters")
-        except Exception as e:
-            self.Debug(f"Error setting Trading parameters: {str(e)}")        
+            self.Error(f"Error filtering Universe: {str(e)}")                    
 
     def UniverseFilter(self, coarse):
         price_filtered_stocks = [] # Initialize array variable for 1st-stage price-filtered stocks for this day
@@ -93,28 +118,45 @@ class CodysAdvancedStrategy(QCAlgorithm):
         diversification_filtered_stocks = [] # Initialize array variable for 4th-stage diversification-filtered stocks for this day
         try:
             # 1st-stage coarse stock filter based on fundamental data availability, min price, and max price
-            self.Debug(f"1st-Stage Filter - Price:\n    HasFundamentalData: true\n    Min Stock Price: {self.min_stock_price}\n    Max Stock Price: {self.max_stock_price}")
+            self.Debug(f"    1st-Stage Filter - Price:    ----    HasFundamentalData: true    ----    Min Stock Price: {self.min_stock_price}    ----    Max Stock Price: {self.max_stock_price}")
             price_filtered_stocks = [c for c in coarse if c.HasFundamentalData and self.min_stock_price <= c.Price < self.max_stock_price]
+            if not price_filtered_stocks:
+                self.Error("        No stocks found in 1st-stage filter")
+                return []            
             sorted_by_volume = sorted(price_filtered_stocks, key=lambda x: x.Volume, reverse=True) # Sort stocks by volume
             top_volume_stocks = sorted_by_volume[:100] # Return top 100 stocks
             self.Debug(f"        Price-filtered stocks count: {len(top_volume_stocks)}")
 
             # 2nd-stage coarse stock filter based on fundamentals
-            self.Debug(f"2nd-Stage Filter - Fundamentals:\n    Min P/E Ratio: {self.min_pe_ratio}\n    Max P/E Ratio: {self.max_pe_ratio}\n    Min Revenue Growth: {self.min_revenue_growth}")
+            self.Debug(f"    2nd-Stage Filter - Fundamentals:    ----    Min P/E Ratio: {self.min_pe_ratio}    ----    Max P/E Ratio: {self.max_pe_ratio}    ----    Min Revenue Growth: {self.min_revenue_growth}")
             for stock_to_filter in top_volume_stocks: # Iterate through the initial filtered stocks
                 if self.UniverseFilter_Fundamentals(stock_to_filter): # Return true/false if stock meets Fundamentals criteria
                     fundamentals_filtered_stocks.append(stock_to_filter.Symbol) # Add the stock to the list if true
+            self.Debug(f"self.ActiveSecurities property so far: {self.ActiveSecurities}")
+            if not fundamentals_filtered_stocks:
+                self.Error("        No stocks found in 2nd-stage filter")
+                return []                
+            # Debug each stock in the fundamentals_filtered_stocks
+            for stock_symbol in fundamentals_filtered_stocks:
+                self.Debug(f"2nd-Stage Filtered Stock: {stock_symbol}")        
             self.Debug(f"        Fundamentals-filtered stocks count: {len(fundamentals_filtered_stocks)}")
 
             # 3rd-stage coarse diversification filter for minimum stock and sector requirements
-            self.Debug(f"3rd-Stage Filter - Diversification:\n    Min Portfolio Stocks > {self.min_total_portfolio_stocks}\n    Min Portfolio Sectors: {self.min_portfolio_sectors}\n    Max Sector %: {self.max_portfolio_exposure_per_biggest_sector*100}%\n    Min Main Sector Stocks: {self.min_portfolio_stocks_per_biggest_sector}")            
+            self.Debug(f"    3rd-Stage Filter - Diversification:    ----    Min Portfolio Stocks > {self.min_total_portfolio_stocks}    ----    Min Portfolio Sectors: {self.min_portfolio_sectors}    ----    Max Sector %: {self.max_portfolio_exposure_per_biggest_sector*100}%    ----    Min Main Sector Stocks: {self.min_portfolio_stocks_per_biggest_sector}")            
             diversification_filtered_stocks = self.UniverseFilter_Diversification(stocks_to_filter=fundamentals_filtered_stocks)
+            if not diversification_filtered_stocks:
+                self.Error("        No stocks found in 3rd-stage filter")
+                return []              
+            # Debug each stock in the diversification_filtered_stocks
+            for stock_symbol in diversification_filtered_stocks:
+                self.Debug(f"        {stock_symbol}")                       
             self.Debug(f"        Diversification-filtered stocks count: {len(diversification_filtered_stocks)}")
 
             # Return the list of coarse-filtered stocks which have passed through filters
+            self.Debug("    Successfully filtered Universe:")
             return diversification_filtered_stocks
         except Exception as e:
-            self.Debug(f"Error on UniverseFilter: {str(e)}")        
+            self.Error(f"Error on UniverseFilter: {str(e)}")        
 
     def UniverseFilter_Fundamentals(self, stock_to_filter):
     # Filters a provided stock by fundamentals criteria
@@ -125,7 +167,7 @@ class CodysAdvancedStrategy(QCAlgorithm):
             # Return true/false if stock is within Profit-Earnings Ratio range, and minimum Revenue Growth
             return pe_ratio > self.min_pe_ratio and pe_ratio < self.max_pe_ratio and revenue_growth > self.min_revenue_growth
         except Exception as e:
-            self.Debug(f"Error on fundamental Universe filtering: {str(e)}")        
+            self.Error(f"Error on fundamental Universe filtering: {str(e)}")        
 
     def UniverseFilter_Diversification(self, stocks_to_filter):
     # Filters a provided list of stocks by various diversification criteria compared to current portfolio holdings
@@ -167,7 +209,21 @@ class CodysAdvancedStrategy(QCAlgorithm):
             # Return the final list of diversification-filtered stocks
             return set(diversification_filtered_stocks)
         except Exception as e:
-            self.Debug(f"Error on UniverseFilter_Diversification: {str(e)}")        
+            self.Error(f"Error on UniverseFilter_Diversification: {str(e)}")        
+
+    def UniverseFilter_Countries(self, fine):
+        # Country data is only available in the "fine" universe selection
+        self.Debug(f"    4th-Stage Filter - Blocked Countries:    ----    {self.blocked_countries}")           
+        try:
+            countries_filtered_stocks = [s.Symbol for s in fine if s.CompanyReference.CountryId not in self.blocked_countries]
+            if not countries_filtered_stocks:
+                self.Error("        No stocks found in countries_filtered_stocks")
+                return []                
+            self.Debug(f"        Countries filtered stocks count: {len(countries_filtered_stocks)}")            
+            self.Debug(f"        Countries filtered stocks: {', '.join([str(symbol) for symbol in countries_filtered_stocks])}")                
+            return sorted(countries_filtered_stocks)[:10]        
+        except Exception as e:
+            self.Error(f"Error on UniverseFilter_Countries: {str(e)}")                
 
     def CalculateStockCountsPerSector(self):
     # Gets a list of stock counts for each sector
@@ -180,18 +236,22 @@ class CodysAdvancedStrategy(QCAlgorithm):
                         stock_counts_per_sector[sector] = stock_counts_per_sector.get(sector, 0) + 1 # Increment the number of stocks for this sector 
             return stock_counts_per_sector # Return the  list of stock counts per sector
         except Exception as e:
-            self.Debug(f"Error on CalculateStockCountsPerSector: {str(e)}")        
+            self.Error(f"Error on CalculateStockCountsPerSector: {str(e)}")        
 
-    def GetSectorForStock(self, symbol):
-    # Gets the sector associated with a provided stock (symbol)
+    def GetSectorForStock(self, stock):
+        # Gets the sector associated with a provided stock (symbol)
         try:
-            if self.ActiveSecurities[symbol].HasFundamentalData: # Check if stock has fundamental data available
-                fundamentals = self.QCAlgorithm.GetFundamental(symbol, "AssetClassification.MorningstarSectorCode") # Get fundamental data for the stock
-                if fundamentals and fundamentals.AssetClassification is not None: # If fundamental data has the necessary sector information
-                    return fundamentals.AssetClassification.MorningstarSectorCode # Return the sector for this stock
-            return None # Return nothing if sector couldn't be found
+            self.Debug(f"    Checking sector for {stock}")
+            if stock.HasFundamentalData:  # Check if fundamental data is available
+                self.Debug(f"        Symbol {stock} has fundamental data")
+                sector = stock.AssetClassification.MorningstarSectorCode  # Get the sector code
+                return sector if sector is not None else "Unknown"  # Return the sector or 'Unknown' if not found
+            else: 
+                self.Error(f"        Symbol {stock} does not have fundamental data")
+                return "Not Available"  # Return 'Not Available' if no fundamental data
         except Exception as e:
-            self.Debug(f"Error on GetSectorForStock: {str(e)}")        
+            self.Error(f"Error on GetSectorForStock for {stock.Symbol}: {str(e)}")  # Log error message
+            return "Error"  # Return 'Error' in case of an exception
 
     def GetDistinctSectorsFromPortfolio(self):
     # Gets the number of sectors in the portfolio
@@ -203,7 +263,7 @@ class CodysAdvancedStrategy(QCAlgorithm):
                     distinct_sectors_from_portfolio.add(sector) # Add sector to the distinct list
             return distinct_sectors_from_portfolio # Return the final list of distinct portfolio sectors
         except Exception as e:
-            self.Debug(f"Error on GetDistinctSectorsFromPortfolio: {str(e)}")        
+            self.Error(f"Error on GetDistinctSectorsFromPortfolio: {str(e)}")        
 
     def CalculateSectorPortfolioValue(self, sector):
     # Gets the total portfolio value for a provided sector 
@@ -214,38 +274,44 @@ class CodysAdvancedStrategy(QCAlgorithm):
                     sector_value += self.Portfolio[symbol].HoldingsValue # Adds the value of portfolio holdings for this stock to the sector_value
             return sector_value # Returns the total portfolio value for the provided sector
         except Exception as e:
-            self.Debug(f"Error on CalculateSectorPortfolioValue: {str(e)}")        
+            self.Error(f"Error on CalculateSectorPortfolioValue: {str(e)}")        
 
-    def UniverseFilter_Countries(self, fine):
-        # Country data is only available in the "fine" universe selection
-        self.Debug(f"rth-Stage Filter - Blocked Countries:\n    {self.blocked_countries}")           
-        try:
-            countries_filtered_stocks = [s.Symbol for s in fine if s.CompanyReference.CountryId not in self.blocked_countries]
-            self.Debug(f"Countries filtered stocks count: {len(countries_filtered_stocks)}")            
-            self.Debug(f"Countries filtered stocks: {', '.join([str(symbol) for symbol in countries_filtered_stocks])}")            
-            return sorted(countries_filtered_stocks)[:10]
+    def OnSecuritiesChanged(self, changes):
+    # This function runs whenever the list of stocks in our filtered Universe changes    
+        self.Debug(f"Universe has changed. Number of symbols: {len(changes.AddedSecurities)}")
+
+        # Loop through each universe in the Universe Manager
+        for universe in self.UniverseManager.Values:
+            self.Debug(f"Universe: {universe.Name}")
+            # Loop through each security in the current universe
+            for security in universe.Members.Values:
+                self.Debug(f"    Symbol: {security.Symbol}")
+
+        # Debug added and removed securities
+        for security in changes.AddedSecurities:
+            self.Debug(f"Added: {security.Symbol}")
+        for security in changes.RemovedSecurities:
+            self.Debug(f"Removed: {security.Symbol}")
+
+        # Adjust indicators and news feed for added and removed securities
+        try: 
+            for security in changes.AddedSecurities:
+                symbol = security.Symbol
+                self.emaShort[symbol] = self.EMA(symbol, 9, Resolution.Minute)
+                self.emaLong[symbol] = self.EMA(symbol, 21, Resolution.Minute)
+                self.atr[symbol] = self.ATR(symbol, 14, MovingAverageType.Wilders, Resolution.Minute)
+                self.RegisterIndicator(symbol, self.stochRsi, Resolution.Minute)            
+                self.news_feed[symbol] = self.AddData(TiingoNews, symbol)
+
+            for security in changes.RemovedSecurities:
+                symbol = security.Symbol
+                if symbol in self.emaShort: del self.emaShort[symbol]
+                if symbol in self.emaLong: del self.emaLong[symbol]
+                if symbol in self.atr: del self.atr[symbol]
+                if symbol in self.news_feed: self.RemoveSecurity(symbol)
         except Exception as e:
-            self.Debug(f"Error on UniverseFilter_Countries: {str(e)}")                
+            self.SetRunTimeError(f"Error on OnSecuritiesChanged: {str(e)}")                        
 
-    # def OnSecuritiesChanged(self, changes):
-    #     # Adjust indicators and news feed for added and removed securities
-    #     try: 
-    #         for security in changes.AddedSecurities:
-    #             symbol = security.Symbol
-    #             self.emaShort[symbol] = self.EMA(symbol, 9, Resolution.Minute)
-    #             self.emaLong[symbol] = self.EMA(symbol, 21, Resolution.Minute)
-    #             self.atr[symbol] = self.ATR(symbol, 14, MovingAverageType.Wilders, Resolution.Minute)
-    #             self.RegisterIndicator(symbol, self.stochRsi, Resolution.Minute)            
-    #             self.news_feed[symbol] = self.AddData(TiingoNews, symbol)
-
-    #         for security in changes.RemovedSecurities:
-    #             symbol = security.Symbol
-    #             if symbol in self.emaShort: del self.emaShort[symbol]
-    #             if symbol in self.emaLong: del self.emaLong[symbol]
-    #             if symbol in self.atr: del self.atr[symbol]
-    #             if symbol in self.news_feed: self.RemoveSecurity(symbol)
-    #     except Exception as e:
-    #         self.Debug(f"Error on OnSecuritiesChanged: {str(e)}")                        
 
     # def OnData(self, data):
     # # Runs upon receipt of every bar/candle for the filtered stocks
