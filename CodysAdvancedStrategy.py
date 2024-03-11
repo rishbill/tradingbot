@@ -25,14 +25,11 @@ class CodysAdvancedStrategy(QCAlgorithm):
             # Portfolio Value
             portfolio_value = self.Portfolio.TotalPortfolioValue
             self.Debug(f"---- Portfolio Value ----------------------------- ${portfolio_value}")
-
             # Stock counts and percentages per sector
             stock_counts_per_sector = self.CalculateStockCountsPerSector()
             total_invested_stocks = sum(stock_counts_per_sector.values())
-            
             if total_invested_stocks == 0:
-                self.Error("-------- No invested stocks in portfolio")
-
+                self.Debug("-------- No invested stocks in portfolio")
             else:
                 self.Debug("---- Portfolio Summary:")
                 for sector, count in stock_counts_per_sector.items():
@@ -88,10 +85,9 @@ class CodysAdvancedStrategy(QCAlgorithm):
             # self.max_portfolio_invested = 0.9 # Maximum total portfolio value invested in stocks 
 
             self.Debug("---- Successfully set Universe selection variables:")
-            self.Debug(f"------- Max stock price -------------------------- ${self.max_stock_price}")
-            self.Debug(f"------- Min stock price -------------------------- ${self.min_stock_price}")
-            self.Debug(f"------- P/E ratio range -------------------------- {self.min_pe_ratio} to {self.max_pe_ratio}")
-            self.Debug(f"------- Min revenue growth ----------------------- {self.min_revenue_growth}")
+            self.Debug(f"------- Stock Price Range -------------------------- ${self.min_stock_price} - ${self.max_stock_price}")
+            self.Debug(f"------- P/E Ratio Range ---------------------------- {self.min_pe_ratio} to {self.max_pe_ratio}")
+            self.Debug(f"------- Min Revenue Growth ------------------------- {self.min_revenue_growth}")
             # self.Debug(f"------- Min total portfolio stocks --------------- {self.min_total_portfolio_stocks}")
             # self.Debug(f"------- Min portfolio sectors -------------------- {self.min_portfolio_sectors}")
             # self.Debug(f"------- Max exposure per biggest sector ---------- {self.max_portfolio_exposure_per_biggest_sector * 100}%")
@@ -109,11 +105,6 @@ class CodysAdvancedStrategy(QCAlgorithm):
 
     def UniverseFilter(self, fundamental: List[Fundamental]) -> List[Symbol]:
         try:
-            self.Debug(f"---- Fundamental Universe Filter:")
-            self.Debug(f"------- HasFundamentalData ------ True")
-            self.Debug(f"------- Min Stock Price --------- ${self.min_stock_price}")
-            self.Debug(f"------- Max Stock Price --------- ${self.max_stock_price}")
-                
             filtered = [f for f in fundamental if f.HasFundamentalData and self.min_stock_price <= f.Price < self.max_stock_price and f.ValuationRatios.PERatio > self.min_pe_ratio and f.ValuationRatios.PERatio < self.max_pe_ratio and f.OperationRatios.RevenueGrowth.OneYear > self.min_revenue_growth and not np.isnan(f.ValuationRatios.PERatio)]
             sortedByDollarVolume = sorted(filtered, key=lambda f: f.DollarVolume, reverse=True)[:100]
             sortedByPeRatio = sorted(sortedByDollarVolume, key=lambda f: f.ValuationRatios.PERatio, reverse=False)[:100]
@@ -176,19 +167,13 @@ class CodysAdvancedStrategy(QCAlgorithm):
 
     def OnSecuritiesChanged(self, changes):
     # This function runs whenever the list of stocks in our filtered Universe changes    
-        self.Debug(f"Universe has changed. Number of symbols: {len(changes.AddedSecurities)}")
-
-        # Loop through each universe in the Universe Manager
-        for universe in self.UniverseManager.Values:
-            # Loop through each security in the current universe
-            for security in universe.Members.Values:
-                self.Debug(f"----Symbol: {security.Symbol}")
+        self.Debug(f"---- Universe Updated. Symbols Count: {len(changes.AddedSecurities)}")
 
         # Debug added and removed securities
         for security in changes.AddedSecurities:
-            self.Debug(f"Added: {security.Symbol}")
+            self.Debug(f"-------- ADDED ---- {security.Symbol}, Price: ${security.Fundamentals.Price}, Dollar Volume: ${security.Fundamentals.DollarVolume}, P/E Ratio:{security.Fundamentals.ValuationRatios.PERatio}, Revenue Growth: {security.Fundamentals.OperationRatios.RevenueGrowth.OneYear}, MarketCap: {security.Fundamentals.MarketCap}, Sector: {security.Fundamentals.AssetClassification.MorningstarSectorCode}")
         for security in changes.RemovedSecurities:
-            self.Debug(f"Removed: {security.Symbol}")
+            self.Debug(f"-------- REMOVED -- {security.Symbol}, Price: ${security.Fundamentals.Price}, Dollar Volume: ${security.Fundamentals.DollarVolume}, P/E Ratio:{security.Fundamentals.ValuationRatios.PERatio}, Revenue Growth: {security.Fundamentals.OperationRatios.RevenueGrowth.OneYear}, MarketCap: {security.Fundamentals.MarketCap}, Sector: {security.Fundamentals.AssetClassification.MorningstarSectorCode}")
 
         # Adjust indicators and news feed for added and removed securities
         try: 
@@ -208,7 +193,6 @@ class CodysAdvancedStrategy(QCAlgorithm):
                 if symbol in self.news_feed: self.RemoveSecurity(symbol)
         except Exception as e:
             self.SetRunTimeError(f"Error on OnSecuritiesChanged: {str(e)}")                        
-
 
     # def OnData(self, data):
     # # Runs upon receipt of every bar/candle for the filtered stocks
