@@ -85,11 +85,6 @@ class CodysAdvancedStrategy(QCAlgorithm):
             self.max_portfolio_exposure_per_biggest_sector = 0.65 # Require biggest portfolio sector to be < 65% of whole portfolio value
             self.min_portfolio_stocks_per_biggest_sector = 5 # Require at least 5 stocks in biggest sector
             self.max_portfolio_invested = 0.9 # Maximum total portfolio value invested in stocks 
-            self.blocked_countries = [
-                # List of country codes for countries to be excluded
-                "BY", "BI", "CF", "CU", "CD", "IR", "IQ", "LB", "LY", "ML", "NI",
-                "KP", "RU", "SO", "SS", "SD", "SY", "UA", "VE", "YE", "ZW", "CN"
-            ]
 
             self.Debug("    Successfully set Universe selection variables:")
             self.Debug(f"       Max stock price: ${self.max_stock_price}")
@@ -101,14 +96,13 @@ class CodysAdvancedStrategy(QCAlgorithm):
             self.Debug(f"       Max exposure per biggest sector: {self.max_portfolio_exposure_per_biggest_sector * 100}%")
             self.Debug(f"       Min stocks per biggest sector: {self.min_portfolio_stocks_per_biggest_sector}")
             self.Debug(f"       Max invested percentage: {self.max_portfolio_invested * 100}%")
-            self.Debug(f"       Blocked countries: {', '.join(self.blocked_countries)}")
         except Exception as e:
             self.Error(f"Error setting Universe selection variables: {str(e)}")
 
         try:
             self.Debug("Filtering Universe...")
             self.UniverseSettings.Resolution = Resolution.Daily
-            self.AddUniverse(self.UniverseFilter, self.UniverseFilter_Countries)  # Get the stocks for today's potential trades
+            self.AddUniverse(self.UniverseFilter)  # Get the stocks for today's potential trades
         except Exception as e:
             self.Error(f"Error filtering Universe: {str(e)}")                    
 
@@ -211,20 +205,6 @@ class CodysAdvancedStrategy(QCAlgorithm):
         except Exception as e:
             self.Error(f"Error on UniverseFilter_Diversification: {str(e)}")        
 
-    def UniverseFilter_Countries(self, fine):
-        # Country data is only available in the "fine" universe selection
-        self.Debug(f"    4th-Stage Filter - Blocked Countries:    ----    {self.blocked_countries}")           
-        try:
-            countries_filtered_stocks = [s.Symbol for s in fine if s.CompanyReference.CountryId not in self.blocked_countries]
-            if not countries_filtered_stocks:
-                self.Error("        No stocks found in countries_filtered_stocks")
-                return []                
-            self.Debug(f"        Countries filtered stocks count: {len(countries_filtered_stocks)}")            
-            self.Debug(f"        Countries filtered stocks: {', '.join([str(symbol) for symbol in countries_filtered_stocks])}")                
-            return sorted(countries_filtered_stocks)[:10]        
-        except Exception as e:
-            self.Error(f"Error on UniverseFilter_Countries: {str(e)}")                
-
     def CalculateStockCountsPerSector(self):
     # Gets a list of stock counts for each sector
         try:
@@ -250,8 +230,8 @@ class CodysAdvancedStrategy(QCAlgorithm):
                 self.Error(f"        Symbol {stock} does not have fundamental data")
                 return "Not Available"  # Return 'Not Available' if no fundamental data
         except Exception as e:
-            self.Error(f"Error on GetSectorForStock for {stock.Symbol}: {str(e)}")  # Log error message
-            return "Error"  # Return 'Error' in case of an exception
+            self.Error(f"Error on GetSectorForStock for {stock.Symbol}: {str(e)}")
+            return "Error"
 
     def GetDistinctSectorsFromPortfolio(self):
     # Gets the number of sectors in the portfolio
