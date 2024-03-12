@@ -8,14 +8,16 @@ class CodysAdvancedStrategy(QCAlgorithm):
         # Basic variables
         try:
             self.Debug("Initializing basic variables...")
-            self.SetStartDate(2024, 1, 1)  # Set Start Date
-            # self.SetEndDate(2024, 1, 1)  # Set End Date -- Default is present
-            self.SetCash(1000)  # Set Strategy Starting Capital
+            self.SetStartDate(2024, 1, 1) # Set Start Date
+            # self.SetEndDate(2024, 1, 1) # Set End Date -- Default is present
+            self.SetCash(1000) # Set Strategy Starting Capital
+            self.SetWarmUp(100) # Set Warm Up period for accurate indicator calculations
             self.total_portfolio_value = self.Portfolio.TotalPortfolioValue
             self.Debug("---- Successfully initialized basic parameters:")
             self.Debug(f"------- Initial Capital -------------------------- ${self.Portfolio.Cash}")
             self.Debug(f"------- Start Date ------------------------------- {self.StartDate}")
             self.Debug(f"------- End Date --------------------------------- {self.EndDate}")
+            self.Debug(f"------- Warm Up ---------------------------------- 100 Days")
         except Exception as e:
             self.Error(f"---- Error initializing basic variables: {str(e)}")
 
@@ -40,32 +42,32 @@ class CodysAdvancedStrategy(QCAlgorithm):
         except Exception as e:
             self.Error(f"---- Error in PortfolioSummary: {str(e)}")
 
-        # # Trading indicators and variables
-        # try:    
-        #     self.Debug("Initializing Trading indicators and variables...")
-        #     # Indicators
-        #     self.emaShort = {}
-        #     self.emaLong = {}
-        #     self.atr = {}
-        #     self.stochRsi = {}
+        # Trading indicators and variables
+        try:    
+            self.Debug("Initializing Trading indicators and variables...")
+            # Indicators
+            self.emaShort = {}
+            self.emaLong = {}
+            self.atr = {}
+            self.stochRsi = {}
 
-        #     # News and Sentiment
-        #     self.news_feed = {}
+            # News and Sentiment
+            self.news_feed = {}
 
-        #     # P/L Calculations
-        #     self.win_count = 0
-        #     self.loss_count = 0
-        #     self.total_profit = 0
-        #     self.total_loss = 0
+            # P/L Calculations
+            self.win_count = 0
+            self.loss_count = 0
+            self.total_profit = 0
+            self.total_loss = 0
 
-        #     # Orders
-        #     self.trailingStopLoss = 0.05  # 5% trailing stop
-        #     self.trailingStopPrice = {}
+            # Orders
+            self.trailingStopLoss = 0.05  # 5% trailing stop
+            self.trailingStopPrice = {}
 
-        #     self.Debug("----Successfully initialized trading variables")
+            self.Debug("---- Successfully initialized trading variables")
 
-        # except Exception as e:
-        #     self.Error(f"Error initializing Trading variables: {str(e)}")        
+        except Exception as e:
+            self.Error(f"Error initializing Trading variables: {str(e)}")        
 
         # Universe Filtering
         try:
@@ -194,184 +196,172 @@ class CodysAdvancedStrategy(QCAlgorithm):
         except Exception as e:
             self.SetRunTimeError(f"Error on OnSecuritiesChanged: {str(e)}")                        
 
-    # def OnData(self, data):
-    # # Runs upon receipt of every bar/candle for the filtered stocks
-    #     try:
-    #         self.UpdateSectorExposure()
+    def OnData(self, data):
+    # Runs upon receipt of every bar/candle for the filtered stocks
+        try:
+            self.UpdateSectorExposure()
             
-    #         total_atr_inverse = sum(1 / self.atr[s].Current.Value for s in self.stockSymbols if s in self.atr)
+            total_atr_inverse = sum(1 / self.atr[s].Current.Value for s in self.stockSymbols if s in self.atr)
             
-    #         # Implement your intraday trading logic here
-    #         for symbol in self.stockSymbols:
-    #             # Check if news for the symbol is present
-    #             news_data = data.Get(TiingoNews, symbol)
-    #             if news_data:
-    #                 for article in news_data.Values:
-    #                     # Log news articles and sentiment
-    #                     self.Debug(f"News for {symbol}: Title - {article.Title}, Sentiment - {article.Sentiment}")
-    #             if self.ShouldInvest(symbol, data):
-    #                 volatility = self.atr[symbol].Current.Value
-    #                 positionSize = self.CalculatePositionSize(volatility)
-    #                 self.SetHoldings(symbol, positionSize)
-    #                 risk = self.CalculateRisk(symbol, data)
-    #                 reward = self.CalculateReward(symbol, data)
-    #                 if reward > 0 and risk > 0 and (reward / risk) >= 2:  # Ensuring neither risk nor reward is zero
-    #                     self.EnterTrade(symbol, data, risk)
+            # Implement your intraday trading logic here
+            for symbol in self.stockSymbols:
+                # Check if news for the symbol is present
+                news_data = data.Get(TiingoNews, symbol)
+                if news_data:
+                    for article in news_data.Values:
+                        # Log news articles and sentiment
+                        self.Debug(f"News for {symbol}: Title - {article.Title}, Sentiment - {article.Sentiment}")
+                if self.ShouldInvest(symbol, data):
+                    volatility = self.atr[symbol].Current.Value
+                    positionSize = self.CalculatePositionSize(volatility)
+                    self.SetHoldings(symbol, positionSize)
+                    risk = self.CalculateRisk(symbol, data)
+                    reward = self.CalculateReward(symbol, data)
+                    if reward > 0 and risk > 0 and (reward / risk) >= 2:  # Ensuring neither risk nor reward is zero
+                        self.EnterTrade(symbol, data, risk)
 
-    #             if symbol in self.trailingStopPrice:
-    #                 if data[symbol].Close < self.trailingStopPrice[symbol]:
-    #                     self.Liquidate(symbol)
-    #                 else:
-    #                     self.trailingStopPrice[symbol] = max(self.trailingStopPrice[symbol], data[symbol].Close * (1 - self.trailingStopLoss))
+                if symbol in self.trailingStopPrice:
+                    if data[symbol].Close < self.trailingStopPrice[symbol]:
+                        self.Liquidate(symbol)
+                    else:
+                        self.trailingStopPrice[symbol] = max(self.trailingStopPrice[symbol], data[symbol].Close * (1 - self.trailingStopLoss))
 
-    #             # Trading logic with advanced order types
-    #             if not self.Portfolio[symbol].Invested and self.IsUptrend(symbol):
-    #                 limitPrice = data[symbol].Close * 0.99  # e.g., 1% below current close
-    #                 quantity = self.CalculateOrderQuantity(symbol, 1 / self.numberOfStocks)
-    #                 self.LimitOrder(symbol, quantity, limitPrice)
-    #             elif self.Portfolio[symbol].Invested:
-    #                 if self.ShouldSell(symbol, data):
-    #                     # Stop-Limit order example
-    #                     stopPrice = data[symbol].Close * 0.9  # 10% stop loss
-    #                     limitPrice = stopPrice * 0.98  # 2% below stop price
-    #                     quantity = self.Portfolio[symbol].Quantity
-    #                     self.StopLimitOrder(symbol, -quantity, stopPrice, limitPrice)
-    #     except Exception as e:
-    #         self.Debug(f"Error on OnData: {str(e)}")                        
+                # Trading logic with advanced order types
+                if not self.Portfolio[symbol].Invested and self.IsUptrend(symbol):
+                    limitPrice = data[symbol].Close * 0.99  # e.g., 1% below current close
+                    quantity = self.CalculateOrderQuantity(symbol, 1 / self.numberOfStocks)
+                    self.LimitOrder(symbol, quantity, limitPrice)
+                elif self.Portfolio[symbol].Invested:
+                    if self.ShouldSell(symbol, data):
+                        # Stop-Limit order example
+                        stopPrice = data[symbol].Close * 0.9  # 10% stop loss
+                        limitPrice = stopPrice * 0.98  # 2% below stop price
+                        quantity = self.Portfolio[symbol].Quantity
+                        self.StopLimitOrder(symbol, -quantity, stopPrice, limitPrice)
+        except Exception as e:
+            self.Debug(f"Error on OnData: {str(e)}")                        
 
-    # def IsUptrend(self, symbol):
-    #     try: 
-    #         # EMA analysis
-    #         short_ema_current = self.emaShort[symbol].Current.Value
-    #         long_ema_current = self.emaLong[symbol].Current.Value
-    #         short_ema_previous = self.emaShort[symbol].Previous.Value
-    #         long_ema_previous = self.emaLong[symbol].Previous.Value
+    def ShouldEnterTrade(self, symbol):
+        try: 
+            # EMA analysis
+            short_ema_current = self.emaShort[symbol].Current.Value
+            long_ema_current = self.emaLong[symbol].Current.Value
+            short_ema_previous = self.emaShort[symbol].Previous.Value
+            long_ema_previous = self.emaLong[symbol].Previous.Value
 
-    #         is_ema_crossover = short_ema_current > long_ema_current
-    #         is_short_ema_rising = short_ema_current > short_ema_previous
-    #         is_ema_distance_widening = (short_ema_current - long_ema_current) > (short_ema_previous - long_ema_previous)
+            is_ema_crossover = short_ema_current > long_ema_current
+            is_short_ema_rising = short_ema_current > short_ema_previous
+            is_ema_distance_widening = (short_ema_current - long_ema_current) > (short_ema_previous - long_ema_previous)
             
-    #         # RSI Analysis
-    #         rsi_value = self.RSI(symbol, 14, Resolution.Minute).Current.Value
-    #         is_rsi_bullish = rsi_value > 50
-    #         is_stoch_rsi_bullish = self.stochRsi.IsReady and self.stochRsi.StochRsi > 0.5  # Example condition
+            # RSI Analysis
+            rsi_value = self.RSI(symbol, 14, Resolution.Minute).Current.Value
+            is_rsi_bullish = rsi_value > 50
+            is_stoch_rsi_bullish = self.stochRsi.IsReady and self.stochRsi.StochRsi > 0.5 
 
-    #         # MACD Analysis
-    #         macd = self.MACD(symbol, 12, 26, 9, MovingAverageType.Exponential, Resolution.Daily, Field.Close)
-    #         is_macd_bullish = macd.Current.Value > macd.Signal.Current.Value
+            # MACD Analysis
+            macd = self.MACD(symbol, 12, 26, 9, MovingAverageType.Exponential, Resolution.Daily, Field.Close)
+            is_macd_bullish = macd.Current.Value > macd.Signal.Current.Value
 
-    #         return is_ema_crossover and is_ema_distance_widening and is_stoch_rsi_bullish and is_rsi_bullish and is_macd_bullish
-    #     except Exception as e:
-    #         self.Debug(f"Error on IsUptrend: {str(e)}")                        
+            return is_ema_crossover and is_ema_distance_widening and is_stoch_rsi_bullish and is_rsi_bullish and is_macd_bullish
+        except Exception as e:
+            self.Debug(f"Error on ShouldEnterTrade: {str(e)}")                        
 
-    # def EnterTrade(self, symbol, data, risk):
-    #     # Enter the trade
-    #     # Size the position based on the risk
-    #     self.SetHoldings(symbol, self.CalculatePositionSize(risk))
-    #     # Set up exit criteria (e.g., stop-loss orders, take-profit orders)
+    def EnterTrade(self, symbol, data, risk):
+        # Enter the trade
+        # Size the position based on the risk
+        self.SetHoldings(symbol, self.CalculatePositionSize(risk))
+        # Set up exit criteria (e.g., stop-loss orders, take-profit orders)
 
-    # def CalculateRisk(self, symbol, data):
-    #     # Assuming you have a method to calculate stop-loss level
-    #     stopLossLevel = self.CalculateStopLossLevel(symbol, data)
-    #     currentPrice = data[symbol].Price
-    #     risk = currentPrice - stopLossLevel  # For a long position
-    #     return risk
+    def CalculateRisk(self, symbol, data):
+        # Assuming you have a method to calculate stop-loss level
+        stopLossLevel = self.CalculateStopLossLevel(symbol, data)
+        currentPrice = data[symbol].Price
+        risk = currentPrice - stopLossLevel  # For a long position
+        return risk
 
-    # def CalculateReward(self, symbol, data):
-    #     # Assuming you have a method to calculate take-profit level
-    #     takeProfitLevel = self.CalculateTakeProfitLevel(symbol, data)
-    #     currentPrice = data[symbol].Price
-    #     reward = takeProfitLevel - currentPrice  # For a long position
-    #     return reward
+    def CalculateReward(self, symbol, data):
+        # Assuming you have a method to calculate take-profit level
+        takeProfitLevel = self.CalculateTakeProfitLevel(symbol, data)
+        currentPrice = data[symbol].Price
+        reward = takeProfitLevel - currentPrice  # For a long position
+        return reward
 
-    # def ShouldBuy(self, symbol, data):
-    #     # Implement your buying logic
-    #     return shouldBuy
+    def ShouldSell(self, symbol, data):
+        currentPrice = data[symbol].Price
+        investedPrice = self.Portfolio[symbol].AveragePrice
+        profit = (currentPrice - investedPrice) / investedPrice
 
-    # def ShouldSell(self, symbol, data):
-    #     currentPrice = data[symbol].Price
-    #     investedPrice = self.Portfolio[symbol].AveragePrice
-    #     profit = (currentPrice - investedPrice) / investedPrice
+        # Check for 10% stop loss or 500% profit target
+        if profit <= -0.10:
+            return True
+        elif profit >= 5.00:
+            self.SellHalfPosition(symbol)  # Custom method to sell half position
+            return False  # Keep the rest of the position
+        return False
 
-    #     # Check for 10% stop loss or 500% profit target
-    #     if profit <= -0.10:
-    #         return True
-    #     elif profit >= 5.00:
-    #         self.SellHalfPosition(symbol)  # Custom method to sell half position
-    #         return False  # Keep the rest of the position
-    #     return False
+    def SellHalfPosition(self, symbol):
+        # Sell half the position of the specified symbol
+        holdings = self.Portfolio[symbol].Quantity
+        self.MarketOrder(symbol, -holdings / 2)
 
-    # def SellHalfPosition(self, symbol):
-    #     # Sell half the position of the specified symbol
-    #     holdings = self.Portfolio[symbol].Quantity
-    #     self.MarketOrder(symbol, -holdings / 2)
+    def OnOrderEvent(self, orderEvent):
+        if orderEvent.Status == OrderStatus.Filled:
+            self.HandleTradeOutcome(orderEvent)
+            if orderEvent.Direction == OrderDirection.Buy:
+                self.trailingStopPrice[orderEvent.Symbol] = orderEvent.FillPrice * (1 - self.trailingStopLoss)
 
-    # def OnOrderEvent(self, orderEvent):
-    #     if orderEvent.Status == OrderStatus.Filled:
-    #         self.HandleTradeOutcome(orderEvent)
-    #         if orderEvent.Direction == OrderDirection.Buy:
-    #             self.trailingStopPrice[orderEvent.Symbol] = orderEvent.FillPrice * (1 - self.trailingStopLoss)
+    def HandleTradeOutcome(self, orderEvent):
+        # Assume orderEvent has the necessary information about the trade outcome
+        profit = self.CalculateProfit(orderEvent)
+        if profit > 0:
+            self.win_count += 1
+            self.total_profit += profit
+        else:
+            self.loss_count += 1
+            self.total_loss += abs(profit)
 
-    # def HandleTradeOutcome(self, orderEvent):
-    #     # Assume orderEvent has the necessary information about the trade outcome
-    #     profit = self.CalculateProfit(orderEvent)
-    #     if profit > 0:
-    #         self.win_count += 1
-    #         self.total_profit += profit
-    #     else:
-    #         self.loss_count += 1
-    #         self.total_loss += abs(profit)
+        self.UpdateWinProbabilityAndRatio()
 
-    #     self.UpdateWinProbabilityAndRatio()
+    def CalculateProfit(self, orderEvent):
+        # Implement logic to calculate profit from the orderEvent
+        return profit
 
-    # def CalculateProfit(self, orderEvent):
-    #     # Implement logic to calculate profit from the orderEvent
-    #     return profit
+    def CalculatePortfolioHeat(self, data):
+        totalHeat = 0
+        for symbol in self.ActiveSecurities.Keys:
+            if self.Portfolio[symbol].Invested:
+                positionSize = self.Portfolio[symbol].Quantity * self.Securities[symbol].Price
+                riskPerTrade = positionSize - self.CalculateStopLossValue(symbol, data)
+                totalHeat += max(0, riskPerTrade)  # Add only positive risk values
+        return totalHeat / self.Portfolio.TotalPortfolioValue
 
-    # def CalculatePortfolioHeat(self, data):
-    #     totalHeat = 0
-    #     for symbol in self.ActiveSecurities.Keys:
-    #         if self.Portfolio[symbol].Invested:
-    #             positionSize = self.Portfolio[symbol].Quantity * self.Securities[symbol].Price
-    #             riskPerTrade = positionSize - self.CalculateStopLossValue(symbol, data)
-    #             totalHeat += max(0, riskPerTrade)  # Add only positive risk values
-    #     return totalHeat / self.Portfolio.TotalPortfolioValue
+    def CalculateStopLossValue(self, symbol, data):
+        # Assuming a stop-loss method to calculate the value at which a stop-loss would be hit
+        # This could be a fixed percentage below the current price or based on ATR, etc.
+        # Example: Fixed percentage
+        stopLossPercentage = 0.1  # 10% stop loss
+        currentPrice = data[symbol].Price
+        stopLossValue = currentPrice * (1 - stopLossPercentage)
+        return self.Portfolio[symbol].Quantity * stopLossValue
 
-    # def CalculateStopLossValue(self, symbol, data):
-    #     # Assuming a stop-loss method to calculate the value at which a stop-loss would be hit
-    #     # This could be a fixed percentage below the current price or based on ATR, etc.
-    #     # Example: Fixed percentage
-    #     stopLossPercentage = 0.1  # 10% stop loss
-    #     currentPrice = data[symbol].Price
-    #     stopLossValue = currentPrice * (1 - stopLossPercentage)
-    #     return self.Portfolio[symbol].Quantity * stopLossValue
+    def UpdateWinProbabilityAndRatio(self):
+        if self.win_count + self.loss_count > 0:
+            win_probability = self.win_count / (self.win_count + self.loss_count)
+            win_loss_ratio = self.total_profit / self.total_loss if self.total_loss != 0 else 0
 
-    # def UpdateWinProbabilityAndRatio(self):
-    #     if self.win_count + self.loss_count > 0:
-    #         win_probability = self.win_count / (self.win_count + self.loss_count)
-    #         win_loss_ratio = self.total_profit / self.total_loss if self.total_loss != 0 else 0
+            # Now, you can use win_probability and win_loss_ratio to calculate your Kelly Criterion
 
-    #         # Now, you can use win_probability and win_loss_ratio to calculate your Kelly Criterion
+    def CalculateStopLossLevel(self, symbol, data):
+        # Implement your logic to calculate the stop-loss level
+        return stopLossLevel
 
-    # def RebalancePortfolio(self):
-    #     # Check for portfolio drawdown and rebalance if needed
-    #     currentPortfolioValue = self.Portfolio.TotalPortfolioValue
-    #     if currentPortfolioValue < self.highestPortfolioValue * (1 - self.MaxPortfolioDrawdown):
-    #         self.Liquidate()  # Exit all positions
-    #     else:
-    #         self.highestPortfolioValue = max(self.highestPortfolioValue, currentPortfolioValue)
+    def CalculateTakeProfitLevel(self, symbol, data):
+        # Implement your logic to calculate the take-profit level
+        return takeProfitLevel
 
-    # def CalculateStopLossLevel(self, symbol, data):
-    #     # Implement your logic to calculate the stop-loss level
-    #     return stopLossLevel
-
-    # def CalculateTakeProfitLevel(self, symbol, data):
-    #     # Implement your logic to calculate the take-profit level
-    #     return takeProfitLevel
-
-    # def CalculatePositionSize(self, risk):
-    #     # Calculate the position size based on the risk and your total portfolio value
-    #     # Example: Risk 1% of portfolio per trade
-    #     riskCapital = self.Portfolio.TotalPortfolioValue * 0.01
-    #     positionSize = riskCapital / risk
-    #     return min(positionSize, 1)  # Ensure not to exceed 100% allocation
+    def CalculatePositionSize(self, risk):
+        # Calculate the position size based on the risk and your total portfolio value
+        # Example: Risk 1% of portfolio per trade
+        riskCapital = self.Portfolio.TotalPortfolioValue * 0.01
+        positionSize = riskCapital / risk
+        return min(positionSize, 1)  # Ensure not to exceed 100% allocation
