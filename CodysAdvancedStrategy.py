@@ -12,7 +12,6 @@ class CodysAdvancedStrategy(QCAlgorithm):
             # self.SetEndDate(2024, 1, 1) # Set End Date -- Default is present
             self.SetCash(1000) # Set Strategy Starting Capital
             self.SetWarmUp(100) # Set Warm Up period for accurate indicator calculations
-            self.total_portfolio_value = self.Portfolio.TotalPortfolioValue
             self.Debug("---- Successfully initialized basic parameters:")
             self.Debug(f"------- Initial Capital -------------------------- ${self.Portfolio.Cash}")
             self.Debug(f"------- Start Date ------------------------------- {self.StartDate}")
@@ -49,7 +48,7 @@ class CodysAdvancedStrategy(QCAlgorithm):
             self.emaShort = {}
             self.emaLong = {}
             self.atr = {}
-            self.stochRsi = {}
+            self.stochasticRsi = {}
 
             # News and Sentiment
             self.news_feed = {}
@@ -60,9 +59,15 @@ class CodysAdvancedStrategy(QCAlgorithm):
             self.total_profit = 0
             self.total_loss = 0
 
-            # Orders
-            self.trailingStopLoss = 0.05  # 5% trailing stop
-            self.trailingStopPrice = {}
+            # Trading Parameters
+            self.max_portfolio_at_risk = 0.90
+            self.max_percent_per_trade = 0.10
+            self.fixed_stop_loss_percent = 0.05
+            self.fixed_take_profit_percent_gain = 5.00
+            self.fixed_take_profit_percent_to_sell = 0.25
+            self.stop_loss_atr_multiplier = 2
+            self.trailing_stop_loss_percent = 0.05
+            self.trailing_stop_price = {}
 
             self.Debug("---- Successfully initialized trading variables")
 
@@ -107,11 +112,16 @@ class CodysAdvancedStrategy(QCAlgorithm):
 
     def UniverseFilter(self, fundamental: List[Fundamental]) -> List[Symbol]:
         try:
-            filtered = [f for f in fundamental if f.HasFundamentalData and self.min_stock_price <= f.Price < self.max_stock_price and f.ValuationRatios.PERatio > self.min_pe_ratio and f.ValuationRatios.PERatio < self.max_pe_ratio and f.OperationRatios.RevenueGrowth.OneYear > self.min_revenue_growth and not np.isnan(f.ValuationRatios.PERatio)]
+            filtered = [f for f in fundamental if f.HasFundamentalData and self.min_stock_price <= f.Price < self.max_stock_price and f.ValuationRatios.PERatio > self.min_pe_ratio and f.ValuationRatios.PERatio < self.max_pe_ratio and f.OperationRatios.RevenueGrowth.OneYear > self.min_revenue_growth and not np.isnan(f.ValuationRatios.PERatio) and not np.isnan(f.OperationRatios.RevenueGrowth.OneYear) and not np.isnan(f.DollarVolume) and not np.isnan(f.MarketCap)]
             sortedByDollarVolume = sorted(filtered, key=lambda f: f.DollarVolume, reverse=True)[:100]
             sortedByPeRatio = sorted(sortedByDollarVolume, key=lambda f: f.ValuationRatios.PERatio, reverse=False)[:100]
             # Return the list of coarse-filtered stocks which have passed through filters
             self.Debug("---- Successfully filtered Universe")
+            for f in sortedByPeRatio:
+                try:
+                    self.Debug(f"-------- {f.Symbol}, Price: ${f.Price}, Dollar Volume: ${f.DollarVolume}, P/E Ratio:{f.ValuationRatios.PERatio}, Revenue Growth: {f.OperationRatios.RevenueGrowth.OneYear}, MarketCap: {f.MarketCap}, Sector: {f.AssetClassification.MorningstarSectorCode}")
+                except Exception as e:
+                    self.Debug(f"Error accessing fundamentals data for {f.Symbol}: {str(e)}")
             return [f.Symbol for f in sortedByPeRatio]
         except Exception as e:
             self.Error(f"---- Error on UniverseFilter: {str(e)}")        
@@ -173,18 +183,25 @@ class CodysAdvancedStrategy(QCAlgorithm):
 
         # Debug added and removed securities
         for security in changes.AddedSecurities:
-            self.Debug(f"-------- ADDED ---- {security.Symbol}, Price: ${security.Fundamentals.Price}, Dollar Volume: ${security.Fundamentals.DollarVolume}, P/E Ratio:{security.Fundamentals.ValuationRatios.PERatio}, Revenue Growth: {security.Fundamentals.OperationRatios.RevenueGrowth.OneYear}, MarketCap: {security.Fundamentals.MarketCap}, Sector: {security.Fundamentals.AssetClassification.MorningstarSectorCode}")
+            try:
+                self.Debug(f"-------- ADDED ---- {security.Symbol}, Price: ${security.Fundamentals.Price}, Dollar Volume: ${security.Fundamentals.DollarVolume}, P/E Ratio:{security.Fundamentals.ValuationRatios.PERatio}, Revenue Growth: {security.Fundamentals.OperationRatios.RevenueGrowth.OneYear}, MarketCap: {security.Fundamentals.MarketCap}, Sector: {security.Fundamentals.AssetClassification.MorningstarSectorCode}")
+            except Exception as e:
+                self.Debug(f"Error accessing fundamentals data for {security.Symbol}: {str(e)}")
         for security in changes.RemovedSecurities:
-            self.Debug(f"-------- REMOVED -- {security.Symbol}, Price: ${security.Fundamentals.Price}, Dollar Volume: ${security.Fundamentals.DollarVolume}, P/E Ratio:{security.Fundamentals.ValuationRatios.PERatio}, Revenue Growth: {security.Fundamentals.OperationRatios.RevenueGrowth.OneYear}, MarketCap: {security.Fundamentals.MarketCap}, Sector: {security.Fundamentals.AssetClassification.MorningstarSectorCode}")
+            try:    
+                self.Debug(f"-------- REMOVED -- {security.Symbol}, Price: ${security.Fundamentals.Price}, Dollar Volume: ${security.Fundamentals.DollarVolume}, P/E Ratio:{security.Fundamentals.ValuationRatios.PERatio}, Revenue Growth: {security.Fundamentals.OperationRatios.RevenueGrowth.OneYear}, MarketCap: {security.Fundamentals.MarketCap}, Sector: {security.Fundamentals.AssetClassification.MorningstarSectorCode}")
+            except Exception as e:
+                self.Debug(f"Error accessing fundamentals data for {security.Symbol}: {str(e)}")
 
         # Adjust indicators and news feed for added and removed securities
         try: 
             for security in changes.AddedSecurities:
+                # Setting the actual indicator parameters for each stock
                 symbol = security.Symbol
                 self.emaShort[symbol] = self.EMA(symbol, 9, Resolution.Minute)
                 self.emaLong[symbol] = self.EMA(symbol, 21, Resolution.Minute)
                 self.atr[symbol] = self.ATR(symbol, 14, MovingAverageType.Wilders, Resolution.Minute)
-                self.RegisterIndicator(symbol, self.stochRsi, Resolution.Minute)            
+                self.RegisterIndicator(symbol, self.stochasticRsi, Resolution.Minute)            
                 self.news_feed[symbol] = self.AddData(TiingoNews, symbol)
 
             for security in changes.RemovedSecurities:
@@ -194,15 +211,11 @@ class CodysAdvancedStrategy(QCAlgorithm):
                 if symbol in self.atr: del self.atr[symbol]
                 if symbol in self.news_feed: self.RemoveSecurity(symbol)
         except Exception as e:
-            self.SetRunTimeError(f"Error on OnSecuritiesChanged: {str(e)}")                        
+            self.Error(f"Error on OnSecuritiesChanged: {str(e)}")                        
 
     def OnData(self, data):
     # Runs upon receipt of every bar/candle for the filtered stocks
-        try:
-            self.UpdateSectorExposure()
-            
-            total_atr_inverse = sum(1 / self.atr[s].Current.Value for s in self.stockSymbols if s in self.atr)
-            
+        try:            
             # Implement your intraday trading logic here
             for symbol in self.stockSymbols:
                 # Check if news for the symbol is present
@@ -211,7 +224,7 @@ class CodysAdvancedStrategy(QCAlgorithm):
                     for article in news_data.Values:
                         # Log news articles and sentiment
                         self.Debug(f"News for {symbol}: Title - {article.Title}, Sentiment - {article.Sentiment}")
-                if self.ShouldInvest(symbol, data):
+                if self.ShouldEnterTrade(symbol, data):
                     volatility = self.atr[symbol].Current.Value
                     positionSize = self.CalculatePositionSize(volatility)
                     self.SetHoldings(symbol, positionSize)
@@ -220,19 +233,13 @@ class CodysAdvancedStrategy(QCAlgorithm):
                     if reward > 0 and risk > 0 and (reward / risk) >= 2:  # Ensuring neither risk nor reward is zero
                         self.EnterTrade(symbol, data, risk)
 
-                if symbol in self.trailingStopPrice:
-                    if data[symbol].Close < self.trailingStopPrice[symbol]:
-                        self.Liquidate(symbol)
-                    else:
-                        self.trailingStopPrice[symbol] = max(self.trailingStopPrice[symbol], data[symbol].Close * (1 - self.trailingStopLoss))
-
                 # Trading logic with advanced order types
                 if not self.Portfolio[symbol].Invested and self.IsUptrend(symbol):
                     limitPrice = data[symbol].Close * 0.99  # e.g., 1% below current close
                     quantity = self.CalculateOrderQuantity(symbol, 1 / self.numberOfStocks)
                     self.LimitOrder(symbol, quantity, limitPrice)
                 elif self.Portfolio[symbol].Invested:
-                    if self.ShouldSell(symbol, data):
+                    if self.ShouldExitTrade(symbol, data):
                         # Stop-Limit order example
                         stopPrice = data[symbol].Close * 0.9  # 10% stop loss
                         limitPrice = stopPrice * 0.98  # 2% below stop price
@@ -256,59 +263,98 @@ class CodysAdvancedStrategy(QCAlgorithm):
             # RSI Analysis
             rsi_value = self.RSI(symbol, 14, Resolution.Minute).Current.Value
             is_rsi_bullish = rsi_value > 50
-            is_stoch_rsi_bullish = self.stochRsi.IsReady and self.stochRsi.StochRsi > 0.5 
+            is_stochastic_rsi_bullish = self.stochasticRsi.IsReady and self.stochasticRsi.stochasticRsi > 0.5 
 
             # MACD Analysis
             macd = self.MACD(symbol, 12, 26, 9, MovingAverageType.Exponential, Resolution.Daily, Field.Close)
             is_macd_bullish = macd.Current.Value > macd.Signal.Current.Value
 
-            return is_ema_crossover and is_ema_distance_widening and is_stoch_rsi_bullish and is_rsi_bullish and is_macd_bullish
+            return is_short_ema_rising and is_ema_crossover and is_ema_distance_widening and is_stochastic_rsi_bullish and is_rsi_bullish and is_macd_bullish
         except Exception as e:
             self.Debug(f"Error on ShouldEnterTrade: {str(e)}")                        
 
-    def EnterTrade(self, symbol, data, risk):
-        # Enter the trade
+    def ShouldEnterTrade(self, symbol, data, risk):
         # Size the position based on the risk
         self.SetHoldings(symbol, self.CalculatePositionSize(risk))
-        # Set up exit criteria (e.g., stop-loss orders, take-profit orders)
+
+    def ShouldExitTrade(self, symbol, data):
+        currentPrice = data[symbol].Price
+        investedPrice = self.Portfolio[symbol].AveragePrice
+        profit = (currentPrice - investedPrice) / investedPrice
+        # Check for 10% stop loss or 500% profit target
+        if profit >= self.fixed_take_profit_percent_gain:
+            holdings = self.Portfolio[symbol].Quantity
+            self.MarketOrder(symbol, -holdings * self.fixed_take_profit_percent_to_sell)
+        return False
+
+    def CalculatePositionSize(self, risk):
+        # Calculate the position size based on the risk and your total portfolio value
+        riskCapital = self.Portfolio.TotalPortfolioValue * self.max_percent_per_trade
+        positionSize = riskCapital / risk
+        return min(positionSize, self.max_portfolio_at_risk)  # Ensure not to exceed 90% allocation
 
     def CalculateRisk(self, symbol, data):
-        # Assuming you have a method to calculate stop-loss level
         stopLossLevel = self.CalculateStopLossLevel(symbol, data)
         currentPrice = data[symbol].Price
         risk = currentPrice - stopLossLevel  # For a long position
         return risk
 
     def CalculateReward(self, symbol, data):
-        # Assuming you have a method to calculate take-profit level
-        takeProfitLevel = self.CalculateTakeProfitLevel(symbol, data)
-        currentPrice = data[symbol].Price
-        reward = takeProfitLevel - currentPrice  # For a long position
-        return reward
+        try:
+            take_profit_level = self.CalculateTakeProfitLevel(symbol, data)
+            current_price = data[symbol].Price
+            reward = take_profit_level - current_price
+            return reward
+        except Exception as e:
+            self.Debug(f"Error in CalculateReward for {symbol}: {str(e)}")
+            return None
 
-    def ShouldSell(self, symbol, data):
-        currentPrice = data[symbol].Price
-        investedPrice = self.Portfolio[symbol].AveragePrice
-        profit = (currentPrice - investedPrice) / investedPrice
+    def CalculateStopLossValue(self, symbol, data):
+        try:
+            stop_loss_level = self.CalculateStopLossLevel(symbol, data)
+            current_price = data[symbol].Price
+            # The value at risk is the difference between the current price and the stop-loss level, multiplied by the quantity
+            value_at_risk = (current_price - stop_loss_level) * self.Portfolio[symbol].Quantity
+            return value_at_risk
+        except Exception as e:
+            self.Debug(f"Error in CalculateStopLossValue for {symbol}: {str(e)}")
+            return None  # Return None in case of an exception
 
-        # Check for 10% stop loss or 500% profit target
-        if profit <= -0.10:
-            return True
-        elif profit >= 5.00:
-            self.SellHalfPosition(symbol)  # Custom method to sell half position
-            return False  # Keep the rest of the position
-        return False
+    def CalculateStopLossLevel(self, symbol, data):
+        try:
+            # Percentage-based stop loss
+            current_price = data[symbol].Price
+            stop_loss_level_percent = current_price * (1 - self.fixed_stop_loss_percent)
+            # ATR-based stop loss
+            atr_value = self.atr[symbol].Current.Value if symbol in self.atr else 0
+            stop_loss_level_atr = current_price - (atr_value * self.stop_loss_atr_multiplier)
+            # Combining methods: Choose the larger of the two for more conservative stop-loss
+            combined_stop_loss_level = max(stop_loss_level_percent, stop_loss_level_atr)
+            return combined_stop_loss_level
+        except Exception as e:
+            self.Debug(f"Error in CalculateStopLossLevel for {symbol}: {str(e)}")
+            return None  # Return None in case of an exception
 
-    def SellHalfPosition(self, symbol):
-        # Sell half the position of the specified symbol
-        holdings = self.Portfolio[symbol].Quantity
-        self.MarketOrder(symbol, -holdings / 2)
+    def CalculateTakeProfitLevel(self, symbol, data):
+        try:
+            # Calculate ATR
+            atr_value = self.atr[symbol].Current.Value if symbol in self.atr else 0
+            # Calculate Fibonacci levels
+            fibonacci_levels = [0.236, 0.382, 0.618]  # Example Fibonacci levels
+            current_price = data[symbol].Price
+            fibonacci_take_profit_levels = [current_price * level for level in fibonacci_levels]
+            # Determine take-profit level based on ATR and Fibonacci levels
+            take_profit_level = min(fibonacci_take_profit_levels) + atr_value  # Example: adding ATR to the nearest Fibonacci level
+            return take_profit_level
+        except Exception as e:
+            self.Debug(f"Error in CalculateTakeProfitLevel for {symbol}: {str(e)}")
+            return None
 
     def OnOrderEvent(self, orderEvent):
         if orderEvent.Status == OrderStatus.Filled:
             self.HandleTradeOutcome(orderEvent)
             if orderEvent.Direction == OrderDirection.Buy:
-                self.trailingStopPrice[orderEvent.Symbol] = orderEvent.FillPrice * (1 - self.trailingStopLoss)
+                self.trailing_stop_price[orderEvent.Symbol] = orderEvent.FillPrice * (1 - self.trailing_stop_loss_percent)
 
     def HandleTradeOutcome(self, orderEvent):
         # Assume orderEvent has the necessary information about the trade outcome
@@ -319,49 +365,35 @@ class CodysAdvancedStrategy(QCAlgorithm):
         else:
             self.loss_count += 1
             self.total_loss += abs(profit)
-
         self.UpdateWinProbabilityAndRatio()
 
     def CalculateProfit(self, orderEvent):
-        # Implement logic to calculate profit from the orderEvent
-        return profit
+        # Extract relevant information from the orderEvent
+        fillPrice = orderEvent.FillPrice
+        quantityFilled = orderEvent.FillQuantity
+        orderDirection = orderEvent.Direction
 
-    def CalculatePortfolioHeat(self, data):
-        totalHeat = 0
-        for symbol in self.ActiveSecurities.Keys:
-            if self.Portfolio[symbol].Invested:
-                positionSize = self.Portfolio[symbol].Quantity * self.Securities[symbol].Price
-                riskPerTrade = positionSize - self.CalculateStopLossValue(symbol, data)
-                totalHeat += max(0, riskPerTrade)  # Add only positive risk values
-        return totalHeat / self.Portfolio.TotalPortfolioValue
-
-    def CalculateStopLossValue(self, symbol, data):
-        # Assuming a stop-loss method to calculate the value at which a stop-loss would be hit
-        # This could be a fixed percentage below the current price or based on ATR, etc.
-        # Example: Fixed percentage
-        stopLossPercentage = 0.1  # 10% stop loss
-        currentPrice = data[symbol].Price
-        stopLossValue = currentPrice * (1 - stopLossPercentage)
-        return self.Portfolio[symbol].Quantity * stopLossValue
+        # Calculate profit based on the order direction (buy or sell)
+        if orderDirection == OrderDirection.Buy:
+            # If it's a buy order, profit is negative (cost)
+            return -1 * fillPrice * quantityFilled
+        elif orderDirection == OrderDirection.Sell:
+            # If it's a sell order, profit is positive (revenue)
+            return fillPrice * quantityFilled
+        else:
+            # Handle other order types if needed
+            return 0  # No profit for other order types
 
     def UpdateWinProbabilityAndRatio(self):
-        if self.win_count + self.loss_count > 0:
-            win_probability = self.win_count / (self.win_count + self.loss_count)
-            win_loss_ratio = self.total_profit / self.total_loss if self.total_loss != 0 else 0
-
-            # Now, you can use win_probability and win_loss_ratio to calculate your Kelly Criterion
-
-    def CalculateStopLossLevel(self, symbol, data):
-        # Implement your logic to calculate the stop-loss level
-        return stopLossLevel
-
-    def CalculateTakeProfitLevel(self, symbol, data):
-        # Implement your logic to calculate the take-profit level
-        return takeProfitLevel
-
-    def CalculatePositionSize(self, risk):
-        # Calculate the position size based on the risk and your total portfolio value
-        # Example: Risk 1% of portfolio per trade
-        riskCapital = self.Portfolio.TotalPortfolioValue * 0.01
-        positionSize = riskCapital / risk
-        return min(positionSize, 1)  # Ensure not to exceed 100% allocation
+        try:
+            total_trades = self.win_count + self.loss_count
+            if total_trades > 0:
+                win_probability = self.win_count / total_trades
+                win_loss_ratio = self.total_profit / self.total_loss if self.total_loss != 0 else float('inf')  # 'inf' if no losses
+                # Calculate Kelly Criterion
+                kelly_criterion = win_probability - ((1 - win_probability) / (win_loss_ratio if win_loss_ratio != 0 else float('inf')))
+                self.Debug(f"Updated Win Probability: {win_probability:.2f}, Win/Loss Ratio: {win_loss_ratio:.2f}, Kelly Criterion: {kelly_criterion:.2f}")
+            else:
+                self.Debug("No trades have been made yet to calculate win probability, ratio, and Kelly Criterion.")
+        except Exception as e:
+            self.Debug(f"Error in UpdateWinProbabilityAndRatio: {str(e)}")
