@@ -50,10 +50,11 @@ class CodysAdvancedStrategy(QCAlgorithm):
             # Indicator Variables
             # These are set per each OnData function that runs with each bar/candle/slice
             self.Debug("Initializing Indicator Variables...")
-            self.rsi_min_threshold = 50
             self.rsi_periods = 14
+            self.rsi_min_threshold = 50
             self.stochastic_rsi = {}
             self.stochastic_rsi_periods = 14
+            self.stochastic_rsi_min_threshold = 0.5
             self.ema_short_periods = 9
             self.ema_long_periods = 14
             self.ema_short = {}
@@ -87,12 +88,13 @@ class CodysAdvancedStrategy(QCAlgorithm):
 
             self.Debug("---- Successfully Initialized Trading Variables: ")
             self.Debug(f"------- Max Portfolio At Risk --------------------- {self.max_portfolio_at_risk * 100}%")
-            self.Debug(f"------- Max Percent Per Trade --------------------- {self.max_percent_per_trade * 100}%")
-            self.Debug(f"------- Fixed Stop Loss Percent ------------------- {self.fixed_stop_loss_percent * 100}%")
-            self.Debug(f"------- Fixed Take Profit Percent Gain ------------ {self.fixed_take_profit_percent_gain}%")
-            self.Debug(f"------- Fixed Take Profit Percent To Sell --------- {self.fixed_take_profit_percent_to_sell * 100}%")
+            self.Debug(f"------- Max Portfolio % Per Trade ----------------- {self.max_percent_per_trade * 100}%")
+            self.Debug(f"------- Fixed Take Profit % ----------------------- {self.max_percent_per_trade * 100}%")
+            self.Debug(f"------- Fixed Take Profit % Gain ------------------ {self.fixed_take_profit_percent_gain * 100}%")
+            self.Debug(f"------- Fixed Take Profit % To Sell --------------- {self.fixed_take_profit_percent_to_sell * 100}%")
+            self.Debug(f"------- Fixed Stop Loss % ------------------------- {self.fixed_stop_loss_percent * 100}%")
             self.Debug(f"------- Stop Loss ATR Multiplier ------------------ {self.stop_loss_atr_multiplier}")
-            self.Debug(f"------- Trailing Stop Loss Percent ---------------- {self.trailing_stop_loss_percent * 100}%")
+            self.Debug(f"------- Trailing Stop Loss % ---------------------- {self.trailing_stop_loss_percent * 100}%")
 
             # Profit/Loss Variables
             # Calculated after each trade via functions HandleTradeOutcome and UpdateWinProbabilityAndRatio
@@ -153,7 +155,7 @@ class CodysAdvancedStrategy(QCAlgorithm):
                     except Exception as e:
                         self.Debug(f"Error accessing fundamentals data for {f.Symbol}: {str(e)}")
             else:
-                self.Debug(f"Warming Up... ({self.warm_up_counter}\100 Days )")
+                self.Debug(f"Warming Up... ({self.warm_up_counter} \ 100 Days )")
             return [f.Symbol for f in sortedByPeRatio]
         except Exception as e:
             self.Error(f"---- Error on UniverseFilter: {str(e)}")        
@@ -259,7 +261,7 @@ class CodysAdvancedStrategy(QCAlgorithm):
                     #         # Log news articles and sentiment
                     #         self.Debug(f"News for {symbol}: Title - {article.Title}, Sentiment - {article.Sentiment}")
                     # Check for Buy condition
-                    if ShouldBuy(symbol, data):
+                    if ShouldBuy(self, symbol, data):
                         limit_price_to_buy = data[symbol].Close * self.buy_limit_order_percent
                         fraction_of_portfolio = 1 / self.numberOfStocks
                         total_cash_to_spend = self.Portfolio.Cash * fraction_of_portfolio
@@ -277,7 +279,7 @@ class CodysAdvancedStrategy(QCAlgorithm):
                             if current_price > self.trailing_take_profit_price[symbol] / (1 + self.trailing_take_profit_percent):
                                 self.trailing_take_profit_price[symbol] = current_price * (1 + self.trailing_take_profit_percent)
                     # Check for Sell condition
-                    if self.Portfolio[symbol].Invested and ShouldSell(symbol, data):
+                    if self.Portfolio[symbol].Invested and ShouldSell(self, symbol, data):
                         holdings = self.Portfolio[symbol].Quantity
                         self.MarketOrder(symbol, -holdings * self.fixed_take_profit_percent_to_sell)
                 except Exception as e:
