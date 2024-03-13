@@ -5,26 +5,25 @@
 from AlgorithmImports import *
 from TradingLogic import *
 import numpy as np
+import config
 
 class CodysAdvancedStrategy(QCAlgorithm):
     def Initialize(self):
     # Main function for class
-        # Basic variables
+        # Debug parameters from config.py
         try:
             self.Debug("Initializing basic variables...")
-            self.SetStartDate(2024, 1, 1) # Set Start Date
-            # self.SetEndDate(2024, 12, 1) # Set End Date -- Default is present
-            self.SetCash(1000) # Set Strategy Starting Capital
-            self.SetWarmUp(100, Resolution.Daily) # Set Warm Up period for accurate indicator calculations
-            self.warm_up_counter = 0 # Increments for each warm day, to check warmup progress
-            self.last_increment_day = None # Used to calculate warm_up_counter
+            config.SetStartDate(self) # Set Start Date
+            # config.SetEndDate(2024, 12, 1) # Set End Date -- Default is present
+            config.SetCash(self) # Set Strategy Starting Capital
+            config.SetWarmUp(self) # Set Warm Up period for accurate indicator calculations
             self.Debug("---- Successfully initialized basic parameters:")
             self.Debug(f"------- Initial Capital -------------------------- ${self.Portfolio.Cash}")
-            self.Debug(f"------- Start Date ------------------------------- {self.StartDate}")
-            self.Debug(f"------- End Date --------------------------------- {self.EndDate}")
+            self.Debug(f"------- Start Date ------------------------------- {config.StartDate}")
+            self.Debug(f"------- End Date --------------------------------- {config.EndDate}")
             self.Debug(f"------- Warm Up ---------------------------------- 100 Days")
         except Exception as e:
-            self.Error(f"---- Error onitializing basic variables: {str(e)}")
+            self.Error(f"---- Error on initializing basic variables: {str(e)}")
 
         # Portfolio Summary
         try:
@@ -47,89 +46,39 @@ class CodysAdvancedStrategy(QCAlgorithm):
             self.Error(f"---- Error on PortfolioSummary: {str(e)}")
 
         try:
-            # Indicator Variables
+            # Indicators
             # These are set per each OnData function that runs with each bar/candle/slice
             self.Debug("Initializing Indicator Variables...")
-            self.rsi_periods = 14
-            self.rsi_min_threshold = 50
-            self.stochastic_rsi = {}
-            self.stochastic_rsi_periods = 14
-            self.stochastic_rsi_min_threshold = 0.5
-            self.ema_short_periods = 9
-            self.ema_long_periods = 14
-            self.ema_short = {}
-            self.ema_long = {}
-            self.atr = {}
-            self.atr_periods = 14
-            self.Debug("---- Successfully Initialized Indicator Variables: self.ema_short, self.ema_long, self.atr, self.stochastic_rsi")
+            self.Debug("---- Successfully Initialized Indicator Variables: config.ema_short, config.ema_long, config.atr, config.stochastic_rsi")
 
-            # News and Sentiment Variables
+            # News and Sentiment
             self.Debug("Initializing News and Sentiment Variables...")
-            self.news_feed = {}
-            self.Debug("---- Successfully Initialized News and Sentiment Variables: self.news_feed")
+            self.Debug("---- Successfully Initialized News and Sentiment Variables: config.news_feed")
 
-            # Trading Parameters
+            # Trading
             self.Debug("Initializing Trading Variables...")
-            self.max_portfolio_at_risk = 0.90 # Max % of portfolio invested
-            self.max_percent_per_trade = 0.15 # Max % of portfolio to spend on a single trade
-            self.fixed_take_profit_percent = 0.05 # Sell 
-            self.fixed_take_profit_percent_gain = 5.00 # Sell a fixed portion if over this % profit
-            self.fixed_take_profit_percent_to_sell = 0.25 # The portion % to sell if fixed_take_profit_percent_gain is reached
-            self.trailing_take_profit_percent = 0.05 # Takes profit based on % of current price
-            self.trailing_take_profit_price = {} # Calculated after each trade
-            self.fixed_stop_loss_percent = 0.20 # Max loss % for a held share, in case trailing stop loss fails            
-            self.trailing_stop_loss_percent = 0.05 # Sell a fixed portion if over this % loss
-            self.stop_loss_atr_multiplier = 2 # Modifies the ATR for increased aggressiveness / risk before triggering stop loss 
-            self.buy_limit_order_percent = 0.99 # Bid buy orders at 99% the ask, to get the extra deal
-            self.max_submitted_order_minutes = 15 # Expire any pending submitted orders after this time
-            self.trailing_stop_price = {} # Calculated after each trade 
-            self.stockSymbols = [] # Holds the stocks in the dynamically filtered Universe
-            self.numberOfStocks = 0  # Number of stocks in stockSymbols
-
             self.Debug("---- Successfully Initialized Trading Variables: ")
-            self.Debug(f"------- Max Portfolio At Risk --------------------- {self.max_portfolio_at_risk * 100}%")
-            self.Debug(f"------- Max Portfolio % Per Trade ----------------- {self.max_percent_per_trade * 100}%")
-            self.Debug(f"------- Fixed Take Profit % ----------------------- {self.max_percent_per_trade * 100}%")
-            self.Debug(f"------- Fixed Take Profit % Gain ------------------ {self.fixed_take_profit_percent_gain * 100}%")
-            self.Debug(f"------- Fixed Take Profit % To Sell --------------- {self.fixed_take_profit_percent_to_sell * 100}%")
-            self.Debug(f"------- Fixed Stop Loss % ------------------------- {self.fixed_stop_loss_percent * 100}%")
-            self.Debug(f"------- Stop Loss ATR Multiplier ------------------ {self.stop_loss_atr_multiplier}")
-            self.Debug(f"------- Trailing Stop Loss % ---------------------- {self.trailing_stop_loss_percent * 100}%")
-
-            # Profit/Loss Variables
-            # Calculated after each trade via functions HandleTradeOutcome and UpdateWinProbabilityAndRatio
-            self.win_count = 0
-            self.loss_count = 0
-            self.total_profit = 0
-            self.total_loss = 0            
+            self.Debug(f"------- Max Portfolio At Risk --------------------- {config.max_portfolio_at_risk * 100}%")
+            self.Debug(f"------- Max Portfolio % Per Trade ----------------- {config.max_percent_per_trade * 100}%")
+            self.Debug(f"------- Fixed Take Profit % ----------------------- {config.max_percent_per_trade * 100}%")
+            self.Debug(f"------- Fixed Take Profit % Gain ------------------ {config.fixed_take_profit_percent_gain * 100}%")
+            self.Debug(f"------- Fixed Take Profit % To Sell --------------- {config.fixed_take_profit_percent_to_sell * 100}%")
+            self.Debug(f"------- Fixed Stop Loss % ------------------------- {config.fixed_stop_loss_percent * 100}%")
+            self.Debug(f"------- Stop Loss ATR Multiplier ------------------ {config.stop_loss_atr_multiplier}")
+            self.Debug(f"------- Trailing Stop Loss % ---------------------- {config.trailing_stop_loss_percent * 100}%")
 
         except Exception as e:
             self.Error(f"Error onitializing Variables: {str(e)}")        
 
         # Universe Filtering
+        max_stock_price = self.Portfolio.TotalPortfolioValue * config.max_stock_price_percent # Limit max stock price to X% of portfolio size, for affordability
         try:
             self.Debug("Initializing Universe filter variables...")
             # Fundamentals criteria
-            self.max_stock_price = self.Portfolio.TotalPortfolioValue * 0.10 # Limit max stock price to X% of portfolio size, for affordability
-            self.min_stock_price = 1.00 # Require the min stock price to limit risk
-            self.min_pe_ratio = 0 # Require stock to have positive earnings
-            self.max_pe_ratio = 20 # Require stock to not be overvalued
-            self.min_revenue_growth = 0 # Require stock to have positive Revenue Growth
-            # # Portfolio diversification criteria
-            # self.min_total_portfolio_stocks = 5 # Require at least 5 stocks for whole portfolio 
-            # self.min_portfolio_sectors = 3 # Require at least 3 sectors for whole portfolio            
-            # self.max_portfolio_exposure_per_biggest_sector = 0.65 # Require biggest portfolio sector to be < 65% of whole portfolio value
-            # self.min_portfolio_stocks_per_biggest_sector = 5 # Require at least 5 stocks in biggest sector
-            # self.max_portfolio_invested = 0.9 # Maximum total portfolio value invested in stocks 
             self.Debug("---- Successfully set Universe selection variables:")
-            self.Debug(f"------- Stock Price Range ------------------------- ${self.min_stock_price} - ${self.max_stock_price}")
-            self.Debug(f"------- P/E Ratio Range --------------------------- {self.min_pe_ratio} to {self.max_pe_ratio}")
-            self.Debug(f"------- Min Revenue Growth ------------------------ {self.min_revenue_growth}")
-            # self.Debug(f"------- Min total portfolio stocks -------------- {self.min_total_portfolio_stocks}")
-            # self.Debug(f"------- Min portfolio sectors ------------------- {self.min_portfolio_sectors}")
-            # self.Debug(f"------- Max exposure per biggest sector --------- {self.max_portfolio_exposure_per_biggest_sector * 100}%")
-            # self.Debug(f"------- Min stocks per biggest sector ----------- {self.min_portfolio_stocks_per_biggest_sector}")
-            # self.Debug(f"------- Max invested percentage ----------------- {self.max_portfolio_invested * 100}%")
+            self.Debug(f"------- Stock Price Range ------------------------- ${config.min_stock_price} - ${config.max_stock_price}")
+            self.Debug(f"------- P/E Ratio Range --------------------------- {config.min_pe_ratio} to {config.max_pe_ratio}")
+            self.Debug(f"------- Min Revenue Growth ------------------------ {config.min_revenue_growth}")
         except Exception as e:
             self.Error(f"---- Error setting Universe selection variables: {str(e)}")
 
@@ -143,11 +92,11 @@ class CodysAdvancedStrategy(QCAlgorithm):
     def UniverseFilter(self, fundamental: List[Fundamental]) -> List[Symbol]:
     # Returns a filtered list of stocks    
         try:
-            filtered = [f for f in fundamental if f.HasFundamentalData and self.min_stock_price <= f.Price < self.max_stock_price and f.ValuationRatios.PERatio > self.min_pe_ratio and f.ValuationRatios.PERatio < self.max_pe_ratio and f.OperationRatios.RevenueGrowth.OneYear > self.min_revenue_growth and not np.isnan(f.ValuationRatios.PERatio) and not np.isnan(f.OperationRatios.RevenueGrowth.OneYear) and not np.isnan(f.DollarVolume) and not np.isnan(f.MarketCap)]
+            filtered = [f for f in fundamental if f.HasFundamentalData and config.min_stock_price <= f.Price < config.max_stock_price and f.ValuationRatios.PERatio > config.min_pe_ratio and f.ValuationRatios.PERatio < config.max_pe_ratio and f.OperationRatios.RevenueGrowth.OneYear > config.min_revenue_growth and not np.isnan(f.ValuationRatios.PERatio) and not np.isnan(f.OperationRatios.RevenueGrowth.OneYear) and not np.isnan(f.DollarVolume) and not np.isnan(f.MarketCap) and f.ValuationRatios.PERatio != 0 and f.OperationRatios.RevenueGrowth.OneYear != 0 and f.DollarVolume != 0 and f.MarketCap != 0]
             sortedByDollarVolume = sorted(filtered, key=lambda f: f.DollarVolume, reverse=True)[:100]
             sortedByPeRatio = sorted(sortedByDollarVolume, key=lambda f: f.ValuationRatios.PERatio, reverse=False)[:100]
             # Return the list of coarse-filtered stocks which have passed through filters
-            if self.warm_up_counter >= 100:
+            if config.warm_up_counter >= 100:
                 self.Debug("---- Successfully filtered Universe")
                 for f in sortedByPeRatio:
                     try:
@@ -155,7 +104,7 @@ class CodysAdvancedStrategy(QCAlgorithm):
                     except Exception as e:
                         self.Debug(f"Error accessing fundamentals data for {f.Symbol}: {str(e)}")
             else:
-                self.Debug(f"Warming Up... ({self.warm_up_counter} \ 100 Days )")
+                self.Debug(f"Warming Up... ({config.warm_up_counter} \ 100 Days)")
             return [f.Symbol for f in sortedByPeRatio]
         except Exception as e:
             self.Error(f"---- Error on UniverseFilter: {str(e)}")        
@@ -166,7 +115,7 @@ class CodysAdvancedStrategy(QCAlgorithm):
             stock_counts_per_sector = {} # Initialize list variable
             for symbol in self.Portfolio.Keys: # Iterate over all stocks in portfolio
                 if self.Portfolio[symbol].Invested: # If the portfolio is invested in this stock
-                    sector = self.GetSectorForStock(symbol) # Get the sector for this stock
+                    sector = config.GetSectorForStock(symbol) # Get the sector for this stock
                     if sector: # If sector was returned
                         stock_counts_per_sector[sector] = stock_counts_per_sector.get(sector, 0) + 1 # Increment the number of stocks for this sector 
             return stock_counts_per_sector # Return the  list of stock counts per sector
@@ -205,7 +154,7 @@ class CodysAdvancedStrategy(QCAlgorithm):
         try:    
             sector_value = 0 # Initialize integer variable 
             for symbol in self.Portfolio.Keys: # Iterate over all stocks in portfolio
-                if self.Portfolio[symbol].Invested and self.GetSector(symbol) == sector: # If the portfolio is invested in this stock, and the sector for this stock matches the sector being checked
+                if self.Portfolio[symbol].Invested and self.GetSectorForStock(symbol) == sector: # If the portfolio is invested in this stock, and the sector for this stock matches the sector being checked
                     sector_value += self.Portfolio[symbol].HoldingsValue # Adds the value of portfolio holdings for this stock to the sector_value
             return sector_value # Returns the total portfolio value for the provided sector
         except Exception as e:
@@ -218,27 +167,27 @@ class CodysAdvancedStrategy(QCAlgorithm):
         try: 
             for security in changes.AddedSecurities:
                 symbol = security.Symbol
-                if symbol not in self.stockSymbols:
-                    self.stockSymbols.append(symbol)
-                self.numberOfStocks = len(self.stockSymbols)    
+                if symbol not in config.stockSymbols:
+                    config.stockSymbols.append(symbol)
+                config.numberOfStocks = len(config.stockSymbols)    
                 # Create and register indicators for each added symbol
-                self.ema_short[symbol] = self.EMA(symbol, self.ema_short_periods, Resolution.Minute)
-                self.ema_long[symbol] = self.EMA(symbol, self.ema_long_periods, Resolution.Minute)
-                self.atr[symbol] = self.ATR(symbol, self.atr_periods, MovingAverageType.Wilders, Resolution.Minute)
+                config.ema_short[symbol] = self.EMA(symbol, config.ema_short_periods, Resolution.Minute)
+                config.ema_long[symbol] = self.EMA(symbol, config.ema_long_periods, Resolution.Minute)
+                config.atr[symbol] = self.ATR(symbol, config.atr_periods, MovingAverageType.Wilders, Resolution.Minute)
                 # Create and register the Stochastic RSI indicator for this symbol
-                self.stochastic_rsi[symbol] = self.STO(symbol, self.stochastic_rsi_periods, Resolution.Minute)  # Create Stochastic RSI
-                self.RegisterIndicator(symbol, self.stochastic_rsi[symbol], Resolution.Minute)
-                self.news_feed[symbol] = self.AddData(TiingoNews, symbol)
+                config.stochastic_rsi[symbol] = self.STO(symbol, config.stochastic_rsi_periods, Resolution.Minute)  # Create Stochastic RSI
+                self.RegisterIndicator(symbol, config.stochastic_rsi[symbol], Resolution.Minute)
+                # config.news_feed[symbol] = self.AddData(TiingoNews, symbol)
             for security in changes.RemovedSecurities:
                 symbol = security.Symbol
-                if symbol in self.stockSymbols:
-                    self.stockSymbols.remove(symbol)
+                if symbol in config.stockSymbols:
+                    config.stockSymbols.remove(symbol)
                 # Remove indicators for removed symbols
-                if symbol in self.ema_short: del self.ema_short[symbol]
-                if symbol in self.ema_long: del self.ema_long[symbol]
-                if symbol in self.atr: del self.atr[symbol]
-                if symbol in self.stochastic_rsi: del self.stochastic_rsi[symbol]
-                if symbol in self.news_feed: self.RemoveSecurity(symbol)
+                if symbol in config.ema_short: del config.ema_short[symbol]
+                if symbol in config.ema_long: del config.ema_long[symbol]
+                if symbol in config.atr: del config.atr[symbol]
+                if symbol in config.stochastic_rsi: del config.stochastic_rsi[symbol]
+                if symbol in config.news_feed: self.RemoveSecurity(symbol)
         except Exception as e:
             self.Error(f"Error on OnSecuritiesChanged: {str(e)}")
 
@@ -246,10 +195,10 @@ class CodysAdvancedStrategy(QCAlgorithm):
     # Runs upon receipt of every bar/candle for the filtered stocks
         current_day = self.Time.day
         if self.IsWarmingUp:
-            if self.last_increment_day != current_day:
-                self.warm_up_counter += 1
-                self.last_increment_day = current_day            
-            for symbol in self.stockSymbols:
+            if config.last_increment_day != current_day:
+                config.warm_up_counter += 1
+                config.last_increment_day = current_day            
+            for symbol in config.stockSymbols:
                 if not data.ContainsKey(symbol):
                     # Skip this symbol if it's not present in the current Slice
                     continue
@@ -262,8 +211,8 @@ class CodysAdvancedStrategy(QCAlgorithm):
                     #         self.Debug(f"News for {symbol}: Title - {article.Title}, Sentiment - {article.Sentiment}")
                     # Check for Buy condition
                     if ShouldBuy(self, symbol, data):
-                        limit_price_to_buy = data[symbol].Close * self.buy_limit_order_percent
-                        fraction_of_portfolio = 1 / self.numberOfStocks
+                        limit_price_to_buy = data[symbol].Close * config.buy_limit_order_percent
+                        fraction_of_portfolio = 1 / config.numberOfStocks
                         total_cash_to_spend = self.Portfolio.Cash * fraction_of_portfolio
                         quantity_to_buy = total_cash_to_spend / limit_price_to_buy
                         quantity_to_buy = max(1, round(quantity_to_buy))  # Ensure at least one unit is bought
@@ -272,29 +221,29 @@ class CodysAdvancedStrategy(QCAlgorithm):
                     if self.Portfolio[symbol].Invested:
                         # Calculate the value at risk for this position
                         current_price = data[symbol].Price
-                        if symbol not in self.trailing_take_profit_price:
-                            self.trailing_take_profit_price[symbol] = current_price * (1 + self.trailing_take_profit_percent)
+                        if symbol not in config.trailing_take_profit_price:
+                            config.trailing_take_profit_price[symbol] = current_price * (1 + config.trailing_take_profit_percent)
                         else:
                             # Update the trailing take profit if the price moves up
-                            if current_price > self.trailing_take_profit_price[symbol] / (1 + self.trailing_take_profit_percent):
-                                self.trailing_take_profit_price[symbol] = current_price * (1 + self.trailing_take_profit_percent)
+                            if current_price > config.trailing_take_profit_price[symbol] / (1 + config.trailing_take_profit_percent):
+                                config.trailing_take_profit_price[symbol] = current_price * (1 + config.trailing_take_profit_percent)
                     # Check for Sell condition
                     if self.Portfolio[symbol].Invested and ShouldSell(self, symbol, data):
                         holdings = self.Portfolio[symbol].Quantity
-                        self.MarketOrder(symbol, -holdings * self.fixed_take_profit_percent_to_sell)
+                        self.MarketOrder(symbol, -holdings * config.fixed_take_profit_percent_to_sell)
                 except Exception as e:
                     self.Debug(f"Error on OnData: {str(e)}")                        
 
     def HandleTradeOutcome(self, orderEvent):
         try:    
             # Assume orderEvent has the necessary information about the trade outcome
-            profit = self.CalculateProfit(orderEvent)
+            profit = config.CalculateProfit(orderEvent)
             if profit > 0:
-                self.win_count += 1
-                self.total_profit += profit
+                config.win_count += 1
+                config.total_profit += profit
             else:
-                self.loss_count += 1
-                self.total_loss += abs(profit)
+                config.loss_count += 1
+                config.total_loss += abs(profit)
             self.UpdateWinProbabilityAndRatio()
         except Exception as e:
             self.Debug(f"Error on HandleTradeOutcome: {str(e)}") 
@@ -318,10 +267,10 @@ class CodysAdvancedStrategy(QCAlgorithm):
 
     def UpdateWinProbabilityAndRatio(self):
         try:
-            total_trades = self.win_count + self.loss_count
+            total_trades = config.win_count + config.loss_count
             if total_trades > 0:
-                win_probability = self.win_count / total_trades
-                win_loss_ratio = self.total_profit / self.total_loss if self.total_loss != 0 else float('inf')  # 'inf' if no losses
+                win_probability = config.win_count / total_trades
+                win_loss_ratio = config.total_profit / config.total_loss if config.total_loss != 0 else float('inf')  # 'inf' if no losses
                 # Calculate Kelly Criterion
                 kelly_criterion = win_probability - ((1 - win_probability) / (win_loss_ratio if win_loss_ratio != 0 else float('inf')))
                 self.Debug(f"Updated Win Probability: {win_probability:.2f}, Win/Loss Ratio: {win_loss_ratio:.2f}, Kelly Criterion: {kelly_criterion:.2f}")
@@ -335,12 +284,12 @@ class CodysAdvancedStrategy(QCAlgorithm):
             # Log the order details
             self.Debug(f"Order Event: {orderEvent.Symbol} - {orderEvent.OrderId} - {orderEvent.Direction} - Quantity: {orderEvent.FillQuantity} at Price: ${orderEvent.FillPrice}")
 
-            self.HandleTradeOutcome(orderEvent)
+            config.HandleTradeOutcome(orderEvent)
 
             if orderEvent.Direction == OrderDirection.Buy:
                 # Set trailing stop price after a buy order is filled
-                new_trailing_stop_price = orderEvent.FillPrice * (1 - self.trailing_stop_loss_percent)
-                self.trailing_stop_price[orderEvent.Symbol] = new_trailing_stop_price
+                new_trailing_stop_price = orderEvent.FillPrice * (1 - config.trailing_stop_loss_percent)
+                config.trailing_stop_price[orderEvent.Symbol] = new_trailing_stop_price
                 self.Debug(f"New trailing stop set for {orderEvent.Symbol}: {new_trailing_stop_price}")
 
             elif orderEvent.Direction == OrderDirection.Sell:
@@ -353,8 +302,8 @@ class CodysAdvancedStrategy(QCAlgorithm):
             order_age = (order_time - orderEvent.OrderTime).total_seconds() / 60  # Age in minutes
 
             # Cancel orders that are older than a set threshold (e.g., 30 minutes)
-            if order_age > self.max_submitted_order_minutes:
-                self.CancelRequest(orderEvent.OrderId)
+            if order_age > config.max_submitted_order_minutes:
+                # self.CancelRequest(orderEvent.OrderId) NOT WORKING DUE TO WRONG METHOD
                 self.Debug(f"Order Cancelled due to timeout: {orderEvent.Symbol}, Order Age: {order_age} minutes")
 
             # Log unfilled orders periodically (e.g., every 15 minutes)
@@ -362,6 +311,6 @@ class CodysAdvancedStrategy(QCAlgorithm):
                 self.Debug(f"Order still pending: {orderEvent.Symbol}, Order Age: {order_age} minutes")
 
     def OnWarmupFinished(self):
-        self.Debug(f"Warm-up completed. Universe includes {len(self.stockSymbols)} symbols.")
-        for symbol in self.stockSymbols:
+        self.Debug(f"Warm-up completed. Universe includes {len(config.stockSymbols)} symbols.")
+        for symbol in config.stockSymbols:
             self.Debug(f"Symbol: {symbol}")

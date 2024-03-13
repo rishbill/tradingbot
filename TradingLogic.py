@@ -16,7 +16,7 @@ def ShouldBuy(self, symbol, data):
             # RSI Analysis
             rsi_value = self.RSI(symbol, self.rsi_periods, Resolution.Daily).Current.Value
             is_rsi_bullish = rsi_value > self.rsi_min_threshold
-            is_stochastic_rsi_bullish = self.stochastic_rsi[symbol].IsReady and self.stochastic_rsi[symbol].stochastic_rsi > 0.5
+            is_stochastic_rsi_bullish = self.stochastic_rsi[symbol].IsReady and self.stochastic_rsi[symbol].Current.Value > self.stochastic_rsi_min_threshold
             
             # MACD Analysis
             macd = self.MACD(symbol, 12, 26, 9, MovingAverageType.Exponential, Resolution.Daily, Field.Close)
