@@ -22,7 +22,7 @@ class CodysAdvancedStrategy(QCAlgorithm):
             self.Debug(f"------- End Date --------------------------------- {self.EndDate}")
             self.Debug(f"------- Warm Up ---------------------------------- 100 Days")
         except Exception as e:
-            self.Error(f"---- Error initializing basic variables: {str(e)}")
+            self.Error(f"---- Error onitializing basic variables: {str(e)}")
 
         # Portfolio Summary
         try:
@@ -42,7 +42,7 @@ class CodysAdvancedStrategy(QCAlgorithm):
                     percentage_of_portfolio = (sector_value / portfolio_value) * 100
                     self.Debug(f"------- Sector: {sector}, Count: {count}, Value: ${sector_value}, % of Portfolio: {percentage_of_portfolio:.2f}%")
         except Exception as e:
-            self.Error(f"---- Error in PortfolioSummary: {str(e)}")
+            self.Error(f"---- Error on PortfolioSummary: {str(e)}")
 
         try:
             # Indicator Variables
@@ -69,6 +69,7 @@ class CodysAdvancedStrategy(QCAlgorithm):
             self.Debug("Initializing Trading Variables...")
             self.max_portfolio_at_risk = 0.90 # Max % of portfolio invested
             self.max_percent_per_trade = 0.15 # Max % of portfolio to spend on a single trade
+            self.fixed_take_profit_percent = 0.05 # Sell 
             self.fixed_take_profit_percent_gain = 5.00 # Sell a fixed portion if over this % profit
             self.fixed_take_profit_percent_to_sell = 0.25 # The portion % to sell if fixed_take_profit_percent_gain is reached
             self.trailing_take_profit_percent = 0.05 # Takes profit based on % of current price
@@ -99,7 +100,7 @@ class CodysAdvancedStrategy(QCAlgorithm):
             self.total_loss = 0            
 
         except Exception as e:
-            self.Error(f"Error Initializing Variables: {str(e)}")        
+            self.Error(f"Error onitializing Variables: {str(e)}")        
 
         # Universe Filtering
         try:
@@ -256,20 +257,20 @@ class CodysAdvancedStrategy(QCAlgorithm):
                     if self.ShouldBuy(symbol, data):
                         limit_price_to_buy = data[symbol].Close * self.buy_limit_order_percent
                         fraction_of_portfolio = 1 / self.numberOfStocks
-                        # Direct calculation of the order quantity
                         total_cash_to_spend = self.Portfolio.Cash * fraction_of_portfolio
                         quantity_to_buy = total_cash_to_spend / limit_price_to_buy
                         quantity_to_buy = max(1, round(quantity_to_buy))  # Ensure at least one unit is bought
                         self.LimitOrder(symbol, quantity_to_buy, limit_price_to_buy)
                     # Update trailing take profit level for each invested symbol
                     if self.Portfolio[symbol].Invested:
+                        # Calculate the value at risk for this position
                         current_price = data[symbol].Price
                         if symbol not in self.trailing_take_profit_price:
-                            self.trailing_take_profit_price[symbol] = current_price * (1 + self.initial_trailing_take_profit_percent)
+                            self.trailing_take_profit_price[symbol] = current_price * (1 + self.trailing_take_profit_percent)
                         else:
                             # Update the trailing take profit if the price moves up
-                            if current_price > self.trailing_take_profit_price[symbol] / (1 + self.initial_trailing_take_profit_percent):
-                                self.trailing_take_profit_price[symbol] = current_price * (1 + self.initial_trailing_take_profit_percent)
+                            if current_price > self.trailing_take_profit_price[symbol] / (1 + self.trailing_take_profit_percent):
+                                self.trailing_take_profit_price[symbol] = current_price * (1 + self.trailing_take_profit_percent)
                     # Check for Sell condition
                     if self.Portfolio[symbol].Invested and self.ShouldSell(symbol, data):
                         holdings = self.Portfolio[symbol].Quantity
@@ -287,43 +288,63 @@ class CodysAdvancedStrategy(QCAlgorithm):
             is_ema_crossover = short_ema_current > long_ema_current
             is_short_ema_rising = short_ema_current > short_ema_previous
             is_ema_distance_widening = (short_ema_current - long_ema_current) > (short_ema_previous - long_ema_previous)
+            
             # RSI Analysis
             rsi_value = self.RSI(symbol, self.rsi_periods, Resolution.Daily).Current.Value
             is_rsi_bullish = rsi_value > self.rsi_min_threshold
             is_stochastic_rsi_bullish = self.stochastic_rsi[symbol].IsReady and self.stochastic_rsi[symbol].stochastic_rsi > 0.5
+            
             # MACD Analysis
             macd = self.MACD(symbol, 12, 26, 9, MovingAverageType.Exponential, Resolution.Daily, Field.Close)
             is_macd_bullish = macd.Current.Value > macd.Signal.Current.Value
+            
             # Risk/Reward Analysis
-            risk = self.CalculateRisk(symbol, data)
+            risk_per_share = self.CalculateRisk(symbol, data)
             reward = self.CalculateReward(symbol, data)
-            if reward is None or risk is None:
-                return False  # Cannot proceed if risk or reward cannot be calculated
-            is_acceptable_risk_reward = reward > 0 and risk > 0 and (reward / risk) >= 2
-            # Check if all conditions are met
+            if reward is None or risk_per_share is None:
+                return False  # Can't proceed if risk or reward can't be calculated
+            is_acceptable_risk_reward = reward > 0 and risk_per_share > 0 and (reward / risk_per_share) >= 2
+
+            # Calculate position size based on risk
+            position_size = self.CalculatePositionSize(risk_per_share)
+            if position_size == 0:
+                return False  # Skip trade if position size is too small
+
+            # Calculate potential value at risk for this trade
+            limit_price_to_buy = data[symbol].Close * self.buy_limit_order_percent
+            potential_quantity = min(position_size, self.Portfolio.Cash / limit_price_to_buy)
+            potential_value_at_risk = self.CalculateStopLossEquityAmount(symbol, data) * potential_quantity
+
+            # Check if potential value at risk exceeds the threshold
+            if potential_value_at_risk > self.max_percent_per_trade * self.Portfolio.TotalPortfolioValue:
+                return False  # Skip trade if it exceeds max percent per trade
+
+            # Check if all indicators are met
             return is_short_ema_rising and is_ema_crossover and is_ema_distance_widening and is_stochastic_rsi_bullish and is_rsi_bullish and is_macd_bullish and is_acceptable_risk_reward
         except Exception as e:
             self.Debug(f"Error on ShouldBuy: {str(e)}") 
             return False
                      
     def ShouldSell(self, symbol, data):
-        current_price = data[symbol].Price
-        invested_price = self.Portfolio[symbol].AveragePrice
-        profit = (current_price - invested_price) / invested_price
-        # Check for Take Profit condition
-        if profit >= self.fixed_take_profit_percent_gain:
-            self.Debug(f"Take Profit Triggered for {symbol}: Current Price: {current_price}, Invested Price: {invested_price}, Profit: {profit}")
-            return True
-        # Check for Stop Loss condition
-        current_trailing_stop = self.trailing_stop_price.get(symbol, 0)
-        new_trailing_stop = current_price * (1 - self.trailing_stop_loss_percent)
-        if new_trailing_stop > current_trailing_stop:
-            self.trailing_stop_price[symbol] = new_trailing_stop
-            self.Debug(f"Updated Trailing Stop for {symbol}: New Trailing Stop: {new_trailing_stop}, Current Price: {current_price}")
-        if current_price <= self.trailing_stop_price.get(symbol, float('inf')):
-            self.Debug(f"Stop Loss Triggered for {symbol}: Current Price: {current_price}, Trailing Stop: {self.trailing_stop_price[symbol]}")
-            return True
-        return False
+        try:
+            current_price = data[symbol].Price
+            stop_loss_price = self.CalculateStopLossPrice(symbol, data)
+            take_profit_price = self.CalculateTakeProfitPrice(symbol, data)
+
+            # Check for Take Profit condition
+            if current_price >= take_profit_price:
+                self.Debug(f"Take Profit Triggered for {symbol}: Current Price: {current_price}, Target: {take_profit_price}")
+                return True
+
+            # Check for Stop Loss condition
+            if current_price <= stop_loss_price:
+                self.Debug(f"Stop Loss Triggered for {symbol}: Current Price: {current_price}, Target: {stop_loss_price}")
+                return True
+
+            return False
+        except Exception as e:
+            self.Debug(f"Error on ShouldSell: {str(e)}")
+            return False
 
     def CalculateRisk(self, symbol, data):
         try:
@@ -332,17 +353,17 @@ class CodysAdvancedStrategy(QCAlgorithm):
             risk = currentPrice - stopLossLevel  # For a long position
             return risk
         except Exception as e:
-            self.Debug(f"Error in CalculateRisk for {symbol}: {str(e)}")
+            self.Debug(f"Error on CalculateRisk for {symbol}: {str(e)}")
             return None        
 
     def CalculateReward(self, symbol, data):
         try:
-            take_profit_level = self.CalculateTakeProfitLevel(symbol, data)
+            take_profit_level = self.CalculateTakeProfitPrice(symbol, data)
             current_price = data[symbol].Price
             reward = take_profit_level - current_price
             return reward
         except Exception as e:
-            self.Debug(f"Error in CalculateReward for {symbol}: {str(e)}")
+            self.Debug(f"Error on CalculateReward for {symbol}: {str(e)}")
             return None
 
     def CalculateStopLossEquityAmount(self, symbol, data):
@@ -353,7 +374,7 @@ class CodysAdvancedStrategy(QCAlgorithm):
             value_at_risk = (current_price - stop_loss_level) * self.Portfolio[symbol].Quantity
             return value_at_risk
         except Exception as e:
-            self.Debug(f"Error in CalculateStopLossEquityAmount for {symbol}: {str(e)}")
+            self.Debug(f"Error on CalculateStopLossEquityAmount for {symbol}: {str(e)}")
             return None  # Return None in case of an exception
 
     def CalculateStopLossPrice(self, symbol, data):
@@ -368,10 +389,10 @@ class CodysAdvancedStrategy(QCAlgorithm):
             combined_stop_loss_level = max(stop_loss_level_percent, stop_loss_level_atr)
             return combined_stop_loss_level
         except Exception as e:
-            self.Debug(f"Error in CalculateStopLossPrice for {symbol}: {str(e)}")
+            self.Debug(f"Error on CalculateStopLossPrice for {symbol}: {str(e)}")
             return None  # Return None in case of an exception
 
-    def CalculateTakeProfitLevel(self, symbol, data):
+    def CalculateTakeProfitPrice(self, symbol, data):
         try:
             current_price = data[symbol].Price
             # Fixed take profit level based on a percentage
@@ -381,14 +402,13 @@ class CodysAdvancedStrategy(QCAlgorithm):
             fibonacci_levels = [0.236, 0.382, 0.618]  # Example Fibonacci levels
             fibonacci_take_profit_levels = [current_price * (1 + level) for level in fibonacci_levels]
             fib_atr_take_profit_level = min(fibonacci_take_profit_levels) + atr_value
-            # Dynamic trailing take profit (needs separate logic for updating it continuously)
-            # Assuming you have a method to update this value regularly
-            trailing_take_profit_level = self.GetUpdatedTrailingTakeProfit(symbol, current_price)
+            # Use the trailing take profit level updated in OnData
+            trailing_take_profit_level = self.trailing_take_profit_price.get(symbol, current_price * (1 + self.trailing_take_profit_percent))
             # Combine methods: Choose the most conservative (highest) take-profit level
             combined_take_profit_level = max(fixed_take_profit_level, fib_atr_take_profit_level, trailing_take_profit_level)
             return combined_take_profit_level
         except Exception as e:
-            self.Debug(f"Error in CalculateTakeProfitLevel for {symbol}: {str(e)}")
+            self.Debug(f"Error in CalculateTakeProfitPrice for {symbol}: {str(e)}")
             return None  # Return None in case of an exception
 
     def CalculatePositionSize(self, risk):
@@ -398,19 +418,23 @@ class CodysAdvancedStrategy(QCAlgorithm):
             positionSize = riskCapital / risk
             return min(positionSize, self.max_portfolio_at_risk)  # Ensure not to exceed 90% allocation
         except Exception as e:
-            self.Debug(f"Error in CalculatePositionSize: {str(e)}")
+            self.Debug(f"Error on CalculatePositionSize: {str(e)}")
             return None  # Return None in case of an exception        
 
     def HandleTradeOutcome(self, orderEvent):
-        # Assume orderEvent has the necessary information about the trade outcome
-        profit = self.CalculateProfit(orderEvent)
-        if profit > 0:
-            self.win_count += 1
-            self.total_profit += profit
-        else:
-            self.loss_count += 1
-            self.total_loss += abs(profit)
-        self.UpdateWinProbabilityAndRatio()
+        try:    
+            # Assume orderEvent has the necessary information about the trade outcome
+            profit = self.CalculateProfit(orderEvent)
+            if profit > 0:
+                self.win_count += 1
+                self.total_profit += profit
+            else:
+                self.loss_count += 1
+                self.total_loss += abs(profit)
+            self.UpdateWinProbabilityAndRatio()
+        except Exception as e:
+            self.Debug(f"Error on HandleTradeOutcome: {str(e)}") 
+            return False            
 
     def CalculateProfit(self, orderEvent):
         # Extract relevant information from the orderEvent
@@ -440,7 +464,7 @@ class CodysAdvancedStrategy(QCAlgorithm):
             else:
                 self.Debug("No trades have been made yet to calculate win probability, ratio, and Kelly Criterion.")
         except Exception as e:
-            self.Error(f"Error in UpdateWinProbabilityAndRatio: {str(e)}")
+            self.Error(f"Error on UpdateWinProbabilityAndRatio: {str(e)}")
 
     def OnOrderEvent(self, orderEvent):
         if orderEvent.Status == OrderStatus.Filled:
