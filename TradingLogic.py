@@ -1,81 +1,74 @@
+# Begin TradingLogic.py
 from AlgorithmImports import *
 import config
 
 def ShouldBuy(self, symbol, data):
     try:
-        if symbol in data and data[symbol] is not None and hasattr(data[symbol], 'Price'):            
-        
+        if symbol in data and data[symbol] is not None and hasattr(data[symbol], 'Price'):
+
+            # Extract indicator values
             short_ema_current = config.ema_short[symbol].Current.Value
             long_ema_current = config.ema_long[symbol].Current.Value
             short_ema_previous = config.ema_short[symbol].Previous.Value
             long_ema_previous = config.ema_long[symbol].Previous.Value
             rsi_value = self.RSI(symbol, config.rsi_periods, Resolution.Daily).Current.Value
             macd = self.MACD(symbol, 12, 26, 9, MovingAverageType.Exponential, Resolution.Daily, Field.Close)
-            risk_per_share = CalculateRisk(self, symbol, data)
-            reward = CalculateReward(self, symbol, data)
-
-            # EMA Crossover
-            if config.enable_ema_crossover:
-                is_ema_crossover = short_ema_current > long_ema_current
-            else:
-                is_ema_crossover = True
-            
-            # Short EMA Rising
-            if config.enable_short_ema_rising:
-                is_short_ema_rising = short_ema_current > short_ema_previous
-            else:
-                is_short_ema_rising = True
-
-            # EMA Distance Widening   
-            if config.enable_ema_distance_widening:
-                is_ema_distance_widening = (short_ema_current - long_ema_current) > (short_ema_previous - long_ema_previous)
-            else:
-                is_ema_distance_widening = True
-
-            # RSI Bullish
-            if config.enable_rsi_bullish:
-                is_rsi_bullish = rsi_value > config.rsi_min_threshold
-            else:
-                is_rsi_bullish = True
-
-            # Stochastic RSI Bullish
-            if config.enable_rsi_bullish:
-                is_stochastic_rsi_bullish = config.stochastic_rsi[symbol].IsReady and config.stochastic_rsi[symbol].Current.Value > config.stochastic_rsi_min_threshold
-            else:
-                is_stochastic_rsi_bullish = True
-            
-            # MACD Bullish
-            if config.enable_macd_bullish:
-                is_macd_bullish = macd.Current.Value > macd.Signal.Current.Value
-            else:
-                is_macd_bullish = True
 
             # Risk/Reward Analysis
-            if config.enable_risk_reward:
-                if reward is None or risk_per_share is None:
-                    return False  # Can't proceed if risk or reward can't be calculated
-                is_acceptable_risk_reward = reward > 0 and risk_per_share > 0 and (reward / risk_per_share) >= 2
-            else:
-                is_acceptable_risk_reward = True
+            risk_per_share = CalculateRisk(self, symbol, data)
+            reward = CalculateReward(self, symbol, data)
+            if risk_per_share is None or reward is None:
+                return False  # Can't proceed if risk or reward can't be calculated
+            is_acceptable_risk_reward = (reward / risk_per_share) >= 2 if config.enable_risk_reward else True
 
-            # Calculate position size based on risk
+            # Decision variables
+            is_ema_crossover = short_ema_current > long_ema_current if config.enable_ema_crossover else True
+            is_short_ema_rising = short_ema_current > short_ema_previous if config.enable_short_ema_rising else True
+            is_ema_distance_widening = (short_ema_current - long_ema_current) > (short_ema_previous - long_ema_previous) if config.enable_ema_distance_widening else True
+            is_rsi_bullish = rsi_value > config.rsi_min_threshold if config.enable_rsi_bullish else True
+            is_stochastic_rsi_bullish = config.stochastic_rsi[symbol].IsReady and config.stochastic_rsi[symbol].Current.Value > config.stochastic_rsi_min_threshold if config.enable_stochastic_rsi_bullish else True
+            is_macd_bullish = macd.Current.Value > macd.Signal.Current.Value if config.enable_macd_bullish else True
+
+            # Calculate potential value at risk
             position_size = CalculatePositionSize(self, risk_per_share)
             if position_size == 0:
                 return False  # Skip trade if position size is 0
-
-            # Calculate potential value at risk for this trade
             limit_price_to_buy = data[symbol].Close * config.buy_limit_order_percent
             potential_quantity = min(position_size, self.Portfolio.Cash / limit_price_to_buy)
             potential_value_at_risk = CalculateStopLossEquityAmount(self, symbol, data) * potential_quantity
 
-            if self.Portfolio.Cash < potential_value_at_risk:
-                return False  # Skip trade if not enough cash
-            else: 
-                if potential_value_at_risk >= config.max_percent_per_trade * self.Portfolio.TotalPortfolioValue:
-                    return False  # Skip trade if it exceeds max percent per trade
+            # Decision logic
+            if is_short_ema_rising and is_ema_crossover and is_ema_distance_widening and is_stochastic_rsi_bullish and is_rsi_bullish and is_macd_bullish and is_acceptable_risk_reward:
+                for symbol, holding in self.Portfolio.items():
+                    if holding.Invested:
+                        config.unique_portfolio_stocks.add(symbol)
+                # current_sector = self.Fundamentals[symbol].AssetClassification.MorningstarSectorCode                        
+                if self.Portfolio.Cash < potential_value_at_risk:
+                    self.Debug(f"Buy Decision: False for {symbol}. Reason: Insufficient cash. Cash Available: {self.Portfolio.Cash}, Value at Risk: {potential_value_at_risk}")
+                    return False
+                elif potential_value_at_risk >= config.max_percent_per_trade * self.Portfolio.TotalPortfolioValue:
+                    self.Debug(f"Buy Decision: False for {symbol}. Reason: Exceeds max percent per trade. Value at Risk: {potential_value_at_risk}, Max Percent Per Trade: {config.max_percent_per_trade * self.Portfolio.TotalPortfolioValue}")
+                    return False
+                elif self.Portfolio[symbol].Invested and len(config.unique_portfolio_stocks) < config.min_stocks_invested:
+                    self.Debug(f"Buy Decision: False for {symbol}. Reason: Portfolio needs more diversification (currently only {len(config.unique_portfolio_stocks)} unique stocks).")
+                    return False
+                # elif current_sector in config.sector_allocation:
+                #     sector_percent = config.sector_allocation[current_sector] / self.Portfolio.TotalPortfolioValue
+                #     if sector_percent > config.max_sector_invested_percent:
+                #         self.Debug(f"Buy Decision: False for {symbol}. Reason: Sector limit exceeded (Sector: {current_sector}, Allocation: {sector_percent:.2%}).")
+                #         return False
+                else:
+                    # Output detailed conditions and values
+                    self.Debug(f"Buy Decision: True for {symbol}. Condition Details:")
+                    self.Debug(f"---- EMA Crossover: {is_ema_crossover} (Short EMA: {short_ema_current} > Long EMA: {long_ema_current})")
+                    self.Debug(f"---- Short EMA Rising: {is_short_ema_rising} (Current Short EMA: {short_ema_current} > Previous Short EMA: {short_ema_previous})")
+                    self.Debug(f"---- EMA Distance Widening: {is_ema_distance_widening} (Current Diff: {short_ema_current - long_ema_current}, Previous Diff: {short_ema_previous - long_ema_previous})")
+                    self.Debug(f"---- RSI Bullish: {is_rsi_bullish} (Value: {rsi_value} > {config.rsi_min_threshold})")
+                    self.Debug(f"---- Stochastic RSI Bullish: {is_stochastic_rsi_bullish} (Value: {config.stochastic_rsi[symbol].Current.Value} > {config.stochastic_rsi_min_threshold})")
+                    self.Debug(f"---- MACD Bullish: {is_macd_bullish} (MACD: {macd.Current.Value} > Signal: {macd.Signal.Current.Value})")
 
-            # Check if all indicators are met
-            return is_short_ema_rising and is_ema_crossover and is_ema_distance_widening and is_stochastic_rsi_bullish and is_rsi_bullish and is_macd_bullish and is_acceptable_risk_reward
+            else:
+                return False
         else:
             return None  # Return None if symbol is not in data or data[symbol] is None
     
@@ -193,3 +186,5 @@ def CalculatePositionSize(self, risk):
     except Exception as e:
         self.Debug(f"Error on CalculatePositionSize: {str(e)}")
         return None  # Return None in case of an exception        
+
+# End TradingLogic.py

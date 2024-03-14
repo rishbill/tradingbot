@@ -11,14 +11,9 @@ enable_stochastic_rsi_bullish = False
 enable_macd_bullish = False
 enable_risk_reward = False
 
-# ShouldSell
-enable_take_profit_trigger = True
-enable_stop_loss_trigger = True
-
 # Trading Parameters
 warmup_period = 100
 starting_cash = 1000
-# end_date = "2024, 1, 1" # Defaults to current, function needs defined if you want to use
 rsi_periods = 14
 rsi_min_threshold = 50
 stochastic_rsi_periods = 14
@@ -42,13 +37,34 @@ min_pe_ratio = 0 # Require stock to have positive earnings
 max_pe_ratio = 20 # Require stock to not be overvalued
 min_revenue_growth = 0 # Require stock to have positive Revenue Growth
 max_stock_price_percent = 0.10
+min_stocks_invested = 5
+max_sector_invested_percent = 0.65
 
 def SetStartDate(algorithm_instance):
-    algorithm_instance.SetStartDate(2023, 10, 1) # Set Start Date for backtest data
+    algorithm_instance.SetStartDate(2023, 10, 1) # Set Start Date for backtest data. End Date defaults to current.
 def SetCash(algorithm_instance):
     algorithm_instance.SetCash(starting_cash)     
 def SetWarmUp(algorithm_instance):
     algorithm_instance.SetWarmUp(warmup_period, Resolution.Daily)
+
+blacklist_stocks = [
+    "CMCSA",  # Comcast Corporation
+    "VZ",     # Verizon Communications Inc.
+    "NSRGY",  # Nestlé S.A.
+    "BAC",    # Bank of America Corporation
+    "SIVB",   # Silicon Valley Bank
+    "SBNY",   # Signature Bank
+    "FRC",    # First Republic Bank
+    "CS",     # Credit Suisse Group AG
+    "BTI",    # British American Tobacco p.l.c.
+    "NWG",    # NatWest Group plc
+    "ILMN",   # Illumina, Inc.
+    "STX",    # Seagate Technology plc
+    "GS",     # Goldman Sachs Group, Inc.
+    "DB",     # Deutsche Bank AG
+    "TMUS",   # T-Mobile US, Inc.
+    "AMZN"    # Amazon.com, Inc.
+]
 
 # Initializing variables
 warmup_counter = 0 # Increments for each warm day, to check warmup progress
@@ -72,6 +88,8 @@ stockSymbols = [] # Holds the stocks in the dynamically filtered Universe
 numberOfStocks = 0  # Number of stocks in stockSymbols
 ticket = None
 open_order_tickets = {}
+unique_portfolio_stocks = set()
+sector_allocation = {}
 
 # Profit/Loss Variables
 # Calculated dynamically after each trade via functions main.HandleTradeOutcome and main.UpdateWinProbabilityAndRatio

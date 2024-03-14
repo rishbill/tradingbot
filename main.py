@@ -1,3 +1,4 @@
+# Begin main.py
 # QuantConnect Knowledge Base
 # https://www.quantconnect.com/docs/v2/writing-algorithms
 # Stocks = Symbols = Securities
@@ -215,37 +216,74 @@ class CodysAdvancedStrategy(QCAlgorithm):
                     self.Debug(f"Error on OnData: {str(e)}")  
             self.CancelOldOrders()                
 
+    def OnOrderEvent(self, orderEvent):
+        if orderEvent.Status == OrderStatus.Filled:
+            symbol = orderEvent.Symbol
+            fill_price = orderEvent.FillPrice
+            fill_qty = orderEvent.FillQuantity
+
+            if orderEvent.Direction == OrderDirection.Buy:
+                self.Debug(f"BUY Order Submitted: {symbol} - ID: {orderEvent.OrderId} - Qty: {fill_qty} * ${fill_price} = ${fill_qty * fill_price}")
+                self.HandleTradeOutcome(orderEvent)
+                new_trailing_stop_price = fill_price * (1 - config.trailing_stop_loss_percent)
+                config.trailing_stop_price[symbol] = new_trailing_stop_price
+                new_trailing_take_profit_price = fill_price * (1 + config.trailing_take_profit_percent)
+                config.trailing_take_profit_price[symbol] = new_trailing_take_profit_price
+
+                fixed_take_profit_level = fill_price * (1 + config.fixed_take_profit_percent)
+                self.Debug(f"---- Fixed Take Profit: {symbol} @ ${fixed_take_profit_level} (Fill Price: ${fill_price} * (1 + {config.fixed_take_profit_percent}))")
+                self.Debug(f"---- Trailing Take Profit: {symbol} @ ${new_trailing_take_profit_price} (Fill Price: ${fill_price} * (1 + {config.trailing_take_profit_percent}))")
+
+                fixed_stop_loss_level = fill_price * (1 - config.fixed_stop_loss_percent)
+                self.Debug(f"---- Fixed Stop Loss: {symbol} @ ${fixed_stop_loss_level} (Fill Price: ${fill_price} * (1 - {config.fixed_stop_loss_percent}))")
+                self.Debug(f"---- Trailing Stop Loss: {symbol} @ ${new_trailing_stop_price} (Fill Price: ${fill_price} * (1 - {config.trailing_stop_loss_percent}))")
+
+            elif orderEvent.Direction == OrderDirection.Sell:
+                self.Debug(f"SELL Order Submitted: {symbol} - ID: {orderEvent.OrderId} - Qty: {fill_qty} * ${fill_price} = ${fill_qty * fill_price}")
+
+                # Retrieve existing trailing stop and take profit prices if any
+                existing_trailing_stop = config.trailing_stop_price.get(symbol, None)
+                if existing_trailing_stop:
+                    self.Debug(f"---- Existing Trailing Stop: {symbol} @ ${existing_trailing_stop}")
+
+                existing_trailing_take_profit = config.trailing_take_profit_price.get(symbol, None)
+                if existing_trailing_take_profit:
+                    self.Debug(f"---- Existing Trailing Take Profit: {symbol} @ ${existing_trailing_take_profit}")
+
+    def CancelOldOrders(self):
+        for symbol, config.ticket in config.open_order_tickets.items():
+            if config.ticket is not None and not config.ticket.OrderClosed:
+                order_time = self.Time  # Current algorithm time
+                order_age = (order_time - config.ticket.Time).total_seconds() / 60  # Age in minutes
+                if order_age > config.max_submitted_order_minutes:
+                    config.ticket.Cancel("Order too old")
+                    self.Debug(f"Order {config.ticket.OrderId} for {symbol} cancelled due to timeout")
+                # Log unfilled orders periodically (e.g., every 15 minutes)
+                elif order_age % 15 == 0:
+                    self.Debug(f"Order still pending: {config.ticket.Symbol}, Order Age: {order_age} minutes")
+
     def HandleTradeOutcome(self, orderEvent):
         try:    
-            # Assume orderEvent has the necessary information about the trade outcome
-            profit = self.CalculateProfit(orderEvent)
-            if profit > 0:
-                config.win_count += 1
-                config.total_profit += profit
-            else:
-                config.loss_count += 1
-                config.total_loss += abs(profit)
-            self.UpdateWinProbabilityAndRatio()
+            # Handling sell orders to calculate profit or loss
+            if orderEvent.Direction == OrderDirection.Sell:
+                # Retrieve the average buy price for the stock
+                average_buy_price = self.Portfolio[orderEvent.Symbol].AveragePrice
+                # Calculate profit or loss
+                profit = (orderEvent.FillPrice - average_buy_price) * orderEvent.FillQuantity
+                # Update win/loss counts and total profit/loss
+                if profit > 0:
+                    config.win_count += 1
+                    config.total_profit += profit
+                else:
+                    config.loss_count += 1
+                    config.total_loss += abs(profit)
+                # Update win probability and ratio after any trade outcome
+                self.UpdateWinProbabilityAndRatio()
+
         except Exception as e:
             self.Debug(f"Error on HandleTradeOutcome: {str(e)}") 
-            return False            
-
-    def CalculateProfit(self, orderEvent):
-        # Extract relevant information from the orderEvent
-        fillPrice = orderEvent.FillPrice
-        quantityFilled = orderEvent.FillQuantity
-        orderDirection = orderEvent.Direction
-        # Calculate profit based on the order direction (buy or sell)
-        if orderDirection == OrderDirection.Buy:
-            # If it's a buy order, profit is negative (cost)
-            return -1 * fillPrice * quantityFilled
-        elif orderDirection == OrderDirection.Sell:
-            # If it's a sell order, profit is positive (revenue)
-            return fillPrice * quantityFilled
-        else:
-            # Handle other order types if needed
-            return 0  # No profit for other order types
-
+            return False
+   
     def UpdateWinProbabilityAndRatio(self):
         try:
             total_trades = config.win_count + config.loss_count
@@ -260,33 +298,9 @@ class CodysAdvancedStrategy(QCAlgorithm):
         except Exception as e:
             self.Error(f"Error on UpdateWinProbabilityAndRatio: {str(e)}")
 
-    def OnOrderEvent(self, orderEvent):
-        if orderEvent.Status == OrderStatus.Filled:
-            # Log the order details
-            self.Debug(f"Order Event: {orderEvent.Symbol} - {orderEvent.OrderId} - {orderEvent.Direction} - Quantity: {orderEvent.FillQuantity} at Price: ${orderEvent.FillPrice}")
-            self.HandleTradeOutcome(orderEvent)
-            if orderEvent.Direction == OrderDirection.Buy:
-                # Set trailing stop price after a buy order is filled
-                new_trailing_stop_price = orderEvent.FillPrice * (1 - config.trailing_stop_loss_percent)
-                config.trailing_stop_price[orderEvent.Symbol] = new_trailing_stop_price
-                self.Debug(f"New trailing stop set for {orderEvent.Symbol}: {new_trailing_stop_price}")
-            elif orderEvent.Direction == OrderDirection.Sell:
-                # Optional: Add any specific actions or logs for sell orders
-                self.Debug(f"Sold {orderEvent.Symbol} - Quantity: {orderEvent.FillQuantity} at Price: ${orderEvent.FillPrice}")
-
-    def CancelOldOrders(self):
-        for symbol, config.ticket in config.open_order_tickets.items():
-            if config.ticket is not None and not config.ticket.OrderClosed:
-                order_time = self.Time  # Current algorithm time
-                order_age = (order_time - config.ticket.Time).total_seconds() / 60  # Age in minutes
-                if order_age > config.max_submitted_order_minutes:
-                    config.ticket.Cancel("Order too old")
-                    self.Debug(f"Order {config.ticket.OrderId} for {symbol} cancelled due to timeout")
-                # Log unfilled orders periodically (e.g., every 15 minutes)
-                elif order_age % 15 == 0:
-                    self.Debug(f"Order still pending: {config.ticket.Symbol}, Order Age: {order_age} minutes")
-
     def OnWarmupFinished(self):
         self.Debug(f"Warmup Finished. Universe includes {len(self.filteredSymbolsDetails)} symbols.")
         for symbol, price, dollar_volume, pe_ratio, revenue_growth, market_cap, sector, industry, ShortName in self.filteredSymbolsDetails:
             self.Debug(f"-------- {symbol}, Price: ${price}, Dollar Volume: ${dollar_volume}, P/E Ratio:{pe_ratio}, Revenue Growth: {revenue_growth}%, MarketCap: {market_cap}, Sector: {sector}, Industry: {industry} - {ShortName}")
+
+# End main.py
