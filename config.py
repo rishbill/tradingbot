@@ -1,5 +1,6 @@
 # Begin config.py
 from AlgorithmImports import *
+import collections
 
 # Enable/Disable Trading Conditions
 # ShouldBuy
@@ -21,8 +22,8 @@ stochastic_rsi_min_threshold = 0.5
 ema_short_periods = 9
 ema_long_periods = 14
 atr_periods = 14
-max_portfolio_at_risk = 0.90 # Max % of portfolio invested
-max_percent_per_trade = 0.15 # Max % of portfolio to spend on a single trade
+max_portfolio_invested_percent = 0.90 # Max % of portfolio willing to invest
+max_trade_portfolio_percent = 0.15 # Max % of portfolio to spend on a single trade
 fixed_take_profit_percent = 0.05 # Sell 
 fixed_take_profit_percent_gain = 5.00 # Sell a fixed portion if over this % profit
 fixed_take_profit_percent_to_sell = 0.25 # The portion % to sell if fixed_take_profit_percent_gain is reached
@@ -70,6 +71,8 @@ blacklist_stocks = [
 warmup_counter = 0 # Increments for each warm day, to check warmup progress
 last_increment_day = None # Used to calculate warmup_counter
 filtered_symbol_details = []
+day_trade_dates = collections.deque(maxlen=5)  # Stores dates of last 5 day trades
+day_trade_counter = 0
 
 # Indicators
 # These are set per each main.OnData function that runs with each bar/candle/slice

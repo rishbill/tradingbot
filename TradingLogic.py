@@ -16,10 +16,10 @@ def ShouldBuy(self, symbol, data):
 
             # Risk/Reward Analysis
             risk_per_share = CalculateRisk(self, symbol, data)
-            reward = CalculateReward(self, symbol, data)
-            if risk_per_share is None or reward is None:
+            reward_per_share = CalculateReward(self, symbol, data)
+            if risk_per_share is None or reward_per_share is None:
                 return False  # Can't proceed if risk or reward can't be calculated
-            is_acceptable_risk_reward = (reward / risk_per_share) >= 2 if config.enable_risk_reward else True
+            is_acceptable_risk_reward = (reward_per_share / risk_per_share) >= 2 if config.enable_risk_reward else True
 
             # Decision variables
             is_ema_crossover = short_ema_current > long_ema_current if config.enable_ema_crossover else True
@@ -30,27 +30,36 @@ def ShouldBuy(self, symbol, data):
             is_macd_bullish = macd.Current.Value > macd.Signal.Current.Value if config.enable_macd_bullish else True
 
             # Calculate potential value at risk
-            position_size = CalculatePositionSize(self, risk_per_share)
-            if position_size == 0:
+            potential_share_qty_to_buy = CalculatePotentialSharesQuantityToBuy(self, risk_per_share)
+            if potential_share_qty_to_buy == 0:
                 return False  # Skip trade if position size is 0
             limit_price_to_buy = data[symbol].Close * config.buy_limit_order_percent
-            potential_quantity = min(position_size, self.Portfolio.Cash / limit_price_to_buy)
-            potential_value_at_risk = CalculateStopLossEquityAmount(self, symbol, data) * potential_quantity
+            potential_quantity = min(potential_share_qty_to_buy, self.Portfolio.Cash / limit_price_to_buy)
+            total_potential_risk_per_stock = CalculateStopLossEquityAmount(self, symbol, data) * potential_quantity
 
-            # Decision logic
             if is_short_ema_rising and is_ema_crossover and is_ema_distance_widening and is_stochastic_rsi_bullish and is_rsi_bullish and is_macd_bullish and is_acceptable_risk_reward:
-                for symbol, holding in self.Portfolio.items():
-                    if holding.Invested:
-                        config.unique_portfolio_stocks.add(symbol)
-                # current_sector = self.Fundamentals[symbol].AssetClassification.MorningstarSectorCode                        
-                if self.Portfolio.Cash < potential_value_at_risk:
-                    self.Debug(f"Buy Decision: False for {symbol}. Reason: Insufficient cash. Cash Available: {self.Portfolio.Cash}, Value at Risk: {potential_value_at_risk}")
+                # Lost all money condition                        
+                if self.Portfolio.TotalPortfolioValue < 50:
+                    self.Debug(f"Buy Decision: False for {symbol}. Reason: GAME OVER - Congratulations, you LOST all your money! (Portfolio Value: {self.Portfolio.TotalPortfolioValue}")
                     return False
-                elif potential_value_at_risk >= config.max_percent_per_trade * self.Portfolio.TotalPortfolioValue:
-                    self.Debug(f"Buy Decision: False for {symbol}. Reason: Exceeds max percent per trade. Value at Risk: {potential_value_at_risk}, Max Percent Per Trade: {config.max_percent_per_trade * self.Portfolio.TotalPortfolioValue}")
+                # Insufficient cash condition
+                if self.Portfolio.Cash < total_potential_risk_per_stock:
+                    self.Debug(f"Buy Decision: False for {symbol}. Reason: Insufficient cash. Cash Available: {self.Portfolio.Cash}, Value at Risk: {total_potential_risk_per_stock}")
                     return False
-                elif self.Portfolio[symbol].Invested and len(config.unique_portfolio_stocks) < config.min_stocks_invested:
-                    self.Debug(f"Buy Decision: False for {symbol}. Reason: Portfolio needs more diversification (currently only {len(config.unique_portfolio_stocks)} unique stocks).")
+                # Max trade portfolio % condition
+                elif total_potential_risk_per_stock >= config.max_trade_portfolio_percent * self.Portfolio.TotalPortfolioValue:
+                    self.Debug(f"Buy Decision: False for {symbol}. Reason: Exceeds max percent per trade. Value at Risk: {total_potential_risk_per_stock}, Max Percent Per Trade: {config.max_trade_portfolio_percent * self.Portfolio.TotalPortfolioValue}")
+                    return False
+                # PDT condition
+                elif len(config.day_trade_dates) >= 3 and self.Portfolio.Cash < 25000:
+                    self.Debug(f"Buy Decision: False for {symbol}. Reason: PDT Rule is in effect, and max day trades reached for period. (Day Trades last 5 days: {config.day_trade_counter}, Portfolio Value: {self.Portfolio.TotalPortfolioValue}")
+                    return False
+                # Minimum unique stocks condition
+                elif len(config.unique_portfolio_stocks) < config.min_stocks_invested:
+                    if symbol not in config.unique_portfolio_stocks:
+                        pass
+                    else:
+                        self.Debug(f"Buy Decision: False for {symbol}. Reason: Portfolio needs more diversification (currently only {len(config.unique_portfolio_stocks)} \ {config.min_stocks_invested} unique stocks).")
                     return False
                 # elif current_sector in config.sector_allocation:
                 #     sector_percent = config.sector_allocation[current_sector] / self.Portfolio.TotalPortfolioValue
@@ -80,15 +89,19 @@ def ShouldSell(self, symbol, data):
     try:
         if symbol in data and data[symbol] is not None and hasattr(data[symbol], 'Price'):            
             current_price = data[symbol].Price
-            stop_loss_price = CalculateStopLossPrice(self, symbol, data)
             take_profit_price = CalculateTakeProfitPrice(self, symbol, data)
-            # Check for Take Profit condition
-            if current_price >= take_profit_price:
-                self.Debug(f"Take Profit Triggered for {symbol}: Current Price: {current_price}, Target: {take_profit_price}")
+            stop_loss_price = CalculateStopLossPrice(self, symbol, data)
+            # PDT condition
+            if len(config.day_trade_dates) >= 3 and self.Portfolio.Cash < 25000:
+                self.Debug(f"Sell Decision: False for {symbol}. Reason: PDT Rule is in effect, and max day trades reached for period. (Day Trades last 5 days: {config.day_trade_counter}, Portfolio Value: {self.Portfolio.TotalPortfolioValue}")
+                return False
+            # Take Profit condition
+            elif current_price >= take_profit_price:
+                self.Debug(f"Sell Decision: True for {symbol}. Reason: Take Profit. Current Price: {current_price}, Target: {take_profit_price}")
                 return True
-            # Check for Stop Loss condition
-            if current_price <= stop_loss_price:
-                self.Debug(f"Stop Loss Triggered for {symbol}: Current Price: {current_price}, Target: {stop_loss_price}")
+            # Stop Loss condition
+            elif current_price <= stop_loss_price:
+                self.Debug(f"Sell Decision: True for {symbol}. Reason: Stop Loss. Current Price: {current_price}, Target: {stop_loss_price}")
                 return True
             return False
         else:
@@ -100,10 +113,12 @@ def ShouldSell(self, symbol, data):
 def CalculateRisk(self, symbol, data):
     try:
         if symbol in data and data[symbol] is not None and hasattr(data[symbol], 'Price'):            
-            stopLossLevel = CalculateStopLossPrice(self, symbol, data)
+            stop_loss_price = CalculateStopLossPrice(self, symbol, data)
             currentPrice = data[symbol].Price
-            risk = currentPrice - stopLossLevel  # For a long position
-            return risk
+            risk_per_share = currentPrice - stop_loss_price
+            if risk_per_share <= 0:
+                risk_per_share = 0.10
+            return risk_per_share
         else:
             return None  # Return None if symbol is not in data or data[symbol] is None
     except Exception as e:
@@ -113,10 +128,10 @@ def CalculateRisk(self, symbol, data):
 def CalculateReward(self, symbol, data):
     try:
         if symbol in data and data[symbol] is not None and hasattr(data[symbol], 'Price'):            
-            take_profit_level = CalculateTakeProfitPrice(self, symbol, data)
+            take_profit_price = CalculateTakeProfitPrice(self, symbol, data)
             current_price = data[symbol].Price
-            reward = take_profit_level - current_price
-            return reward
+            reward_per_share = take_profit_price - current_price
+            return reward_per_share
         else:
             return None  # Return None if symbol is not in data or data[symbol] is None            
     except Exception as e:
@@ -129,8 +144,8 @@ def CalculateStopLossEquityAmount(self, symbol, data):
             stop_loss_level = CalculateStopLossPrice(self, symbol, data)
             current_price = data[symbol].Price
             # The value at risk is the difference between the current price and the stop-loss level, multiplied by the quantity
-            value_at_risk = (current_price - stop_loss_level) * self.Portfolio[symbol].Quantity
-            return value_at_risk
+            risk_value_per_stock = (current_price - stop_loss_level) * self.Portfolio[symbol].Quantity
+            return risk_value_per_stock
         else:
             return None  # Return None if symbol is not in data or data[symbol] is None                        
     except Exception as e:
@@ -139,18 +154,26 @@ def CalculateStopLossEquityAmount(self, symbol, data):
 
 def CalculateStopLossPrice(self, symbol, data):
     try:
-        if symbol in data and data[symbol] is not None and hasattr(data[symbol], 'Price'):            
-            # Percentage-based stop loss
+        if symbol in data and data[symbol] is not None and hasattr(data[symbol], 'Price'):
             current_price = data[symbol].Price
+
+            # Percentage-based stop loss
             stop_loss_level_percent = current_price * (1 - config.fixed_stop_loss_percent)
+
             # ATR-based stop loss
-            atr_value = config.atr[symbol].Current.Value if symbol in config.atr else 0
+            atr_value = config.atr[symbol].Current.Value if config.atr[symbol].Current.Value and symbol in config.atr else 0
             stop_loss_level_atr = current_price - (atr_value * config.stop_loss_atr_multiplier)
-            # Combining methods: Choose the larger of the two for more conservative stop-loss
-            combined_stop_loss_level = max(stop_loss_level_percent, stop_loss_level_atr)
+
+            # Trailing stop loss
+            trailing_stop_loss_level = current_price * (1 - config.trailing_stop_loss_percent)
+            if symbol in config.trailing_stop_price:
+                trailing_stop_loss_level = max(trailing_stop_loss_level, config.trailing_stop_price[symbol])
+
+            # Combining methods: Choose the largest of the three for the most conservative stop-loss
+            combined_stop_loss_level = max(stop_loss_level_percent, stop_loss_level_atr, trailing_stop_loss_level)
             return combined_stop_loss_level
         else:
-            return None  # Return None if symbol is not in data or data[symbol] is None                                    
+            return None  # Return None if symbol is not in data or data[symbol] is None
     except Exception as e:
         self.Debug(f"Error on CalculateStopLossPrice for {symbol}: {str(e)}")
         return None  # Return None in case of an exception
@@ -160,31 +183,40 @@ def CalculateTakeProfitPrice(self, symbol, data):
         if symbol in data and data[symbol] is not None and hasattr(data[symbol], 'Price'):            
             current_price = data[symbol].Price
             # Fixed take profit level based on a percentage
-            fixed_take_profit_level = current_price * (1 + config.fixed_take_profit_percent)
+            fixed_take_profit_price = current_price * (1 + config.fixed_take_profit_percent)
             # Fibonacci levels with ATR
             atr_value = config.atr[symbol].Current.Value if symbol in config.atr else 0
-            fibonacci_levels = [0.236, 0.382, 0.618]  # Example Fibonacci levels
-            fibonacci_take_profit_levels = [current_price * (1 + level) for level in fibonacci_levels]
-            fib_atr_take_profit_level = min(fibonacci_take_profit_levels) + atr_value
+            fibonacci_retracement_levels = [0.236, 0.382, 0.618]  # Example Fibonacci levels
+            fibonacci_take_profit_prices = [current_price * (1 + level) for level in fibonacci_retracement_levels]
+            fib_atr_take_profit_price = min(fibonacci_take_profit_prices) + atr_value
             # Use the trailing take profit level updated in OnData
-            trailing_take_profit_level = config.trailing_take_profit_price.get(symbol, current_price * (1 + config.trailing_take_profit_percent))
+            trailing_take_profit_price = config.trailing_take_profit_price.get(symbol, current_price * (1 + config.trailing_take_profit_percent))
             # Combine methods: Choose the most conservative (highest) take-profit level
-            combined_take_profit_level = max(fixed_take_profit_level, fib_atr_take_profit_level, trailing_take_profit_level)
-            return combined_take_profit_level
+            combined_take_profit_price = max(fixed_take_profit_price, fib_atr_take_profit_price, trailing_take_profit_price)
+            return combined_take_profit_price
         else:
             return None  # Return None if symbol is not in data or data[symbol] is None                                                
     except Exception as e:
         self.Debug(f"Error in CalculateTakeProfitPrice for {symbol}: {str(e)}")
         return None  # Return None in case of an exception
 
-def CalculatePositionSize(self, risk):
+def CalculatePotentialSharesQuantityToBuy(self, risk_per_share):
     try:
+        if risk_per_share <= 0:
+            # Handle the scenario where risk is zero or negative
+            self.Error(f"Risk per share is non-positive (Risk: {risk_per_share}). Skipping position size calculation.")
+            return 0  # Return 0 to indicate no position should be taken
+
         # Calculate the position size based on the risk and your total portfolio value
-        riskCapital = self.Portfolio.TotalPortfolioValue * config.max_percent_per_trade
-        positionSize = riskCapital / risk
-        return min(positionSize, config.max_portfolio_at_risk)  # Ensure not to exceed 90% allocation
+        potential_share_qty_to_buy = (self.Portfolio.TotalPortfolioValue * config.max_trade_portfolio_percent) / risk_per_share
+
+        # Calculate the maximum number of shares you can hold based on the allowed portfolio allocation
+        max_shares_based_on_allocation = (self.Portfolio.TotalPortfolioValue * config.max_portfolio_invested_percent) / risk_per_share
+
+        # Return at least 1 share if all other potentials are 0
+        return max(1, min(potential_share_qty_to_buy, max_shares_based_on_allocation))
     except Exception as e:
-        self.Debug(f"Error on CalculatePositionSize: {str(e)}")
-        return None  # Return None in case of an exception        
+        self.Debug(f"Error on CalculatePotentialSharesQuantityToBuy: {str(e)}")
+        return None  # Return None in case of an exception
 
 # End TradingLogic.py

@@ -197,7 +197,7 @@ class CodysAdvancedStrategy(QCAlgorithm):
                         quantity_to_buy = max(1, round(quantity_to_buy))  # Ensure at least one unit is bought
                         config.ticket = self.LimitOrder(symbol, quantity_to_buy, limit_price_to_buy)
                         config.open_order_tickets[symbol] = config.ticket
-                    # Update trailing take profit level for each invested symbol
+                    # Update new trailing take profit price for each invested symbol
                     if self.Portfolio[symbol].Invested:
                         # Calculate the value at risk for this position
                         current_price = data[symbol].Price
@@ -207,6 +207,13 @@ class CodysAdvancedStrategy(QCAlgorithm):
                             # Update the trailing take profit if the price moves up
                             if current_price > config.trailing_take_profit_price[symbol] / (1 + config.trailing_take_profit_percent):
                                 config.trailing_take_profit_price[symbol] = current_price * (1 + config.trailing_take_profit_percent)
+                        if symbol not in config.trailing_stop_loss_price:
+                            # Initialize trailing stop loss price if it doesn't exist
+                            config.trailing_stop_loss_price[symbol] = current_price * (1 - config.trailing_stop_loss_percent)
+                        else:
+                            # Update the trailing stop loss if the price moves up
+                            if current_price > config.trailing_stop_loss_price[symbol]:
+                                config.trailing_stop_loss_price[symbol] = current_price * (1 - config.trailing_stop_loss_percent)
                     # Check for Sell condition
                     if self.Portfolio[symbol].Invested and ShouldSell(self, symbol, data):
                         holdings = self.Portfolio[symbol].Quantity
@@ -214,53 +221,84 @@ class CodysAdvancedStrategy(QCAlgorithm):
                         config.open_order_tickets[symbol] = config.ticket
                 except Exception as e:
                     self.Debug(f"Error on OnData: {str(e)}")  
-            self.CancelOldOrders()                
+            self.CancelOldOrders()
 
     def OnOrderEvent(self, orderEvent):
-        if orderEvent.Status == OrderStatus.Filled:
-            symbol = orderEvent.Symbol
-            fill_price = orderEvent.FillPrice
-            fill_qty = orderEvent.FillQuantity
+        symbol = orderEvent.Symbol
+        fill_price = orderEvent.FillPrice
+        fill_qty = orderEvent.FillQuantity
+        current_date = self.Time.date()
 
+        # Day trade tracking
+        order_type = 'buy' if orderEvent.Direction == OrderDirection.Buy else 'sell'
+        if symbol not in config.day_trades:
+            config.day_trades[symbol] = {'buy': False, 'sell': False, 'date': None}
+
+        if config.day_trades[symbol]['date'] == current_date:
+            # Check for day trade (buy and sell on the same day)
+            if (order_type == 'sell' and config.day_trades[symbol]['buy']) or (order_type == 'buy' and config.day_trades[symbol]['sell']):
+                config.day_trade_dates.append(current_date)
+                config.day_trade_counter += 1
+                self.Debug(f"Day Trade Detected for {symbol} on {current_date}. Total Day Trades in last 5 days: {len(config.day_trade_dates)}")
+                # Reset the day trade flags for this stock
+                config.day_trades[symbol] = {'buy': False, 'sell': False, 'date': None}
+        else:
+            # Record this trade action
+            config.day_trades[symbol][order_type] = True
+            config.day_trades[symbol]['date'] = current_date
+
+        config.unique_portfolio_stocks.clear()
+
+        if orderEvent.Status == OrderStatus.Submitted:
+            self.Debug(f"Order Submitted: {symbol} - ID: {orderEvent.OrderId} - Qty: {fill_qty} * ${fill_price} = ${fill_qty * fill_price}")
+
+        # Add all currently invested stocks to the unique_portfolio_stocks
+        config.unique_portfolio_stocks = {s for s, holding in self.Portfolio.items() if holding.Invested}
+        self.Debug(f"Updated unique portfolio stocks: {config.unique_portfolio_stocks}")
+
+        if orderEvent.Status == OrderStatus.Filled:
             if orderEvent.Direction == OrderDirection.Buy:
-                self.Debug(f"BUY Order Submitted: {symbol} - ID: {orderEvent.OrderId} - Qty: {fill_qty} * ${fill_price} = ${fill_qty * fill_price}")
+                self.Debug(f"---- BUY Order Filled: {symbol} - ID: {orderEvent.OrderId} - Qty: {fill_qty} * ${fill_price} = ${fill_qty * fill_price}")
                 self.HandleTradeOutcome(orderEvent)
                 new_trailing_stop_price = fill_price * (1 - config.trailing_stop_loss_percent)
                 config.trailing_stop_price[symbol] = new_trailing_stop_price
                 new_trailing_take_profit_price = fill_price * (1 + config.trailing_take_profit_percent)
                 config.trailing_take_profit_price[symbol] = new_trailing_take_profit_price
 
-                fixed_take_profit_level = fill_price * (1 + config.fixed_take_profit_percent)
-                self.Debug(f"---- Fixed Take Profit: {symbol} @ ${fixed_take_profit_level} (Fill Price: ${fill_price} * (1 + {config.fixed_take_profit_percent}))")
-                self.Debug(f"---- Trailing Take Profit: {symbol} @ ${new_trailing_take_profit_price} (Fill Price: ${fill_price} * (1 + {config.trailing_take_profit_percent}))")
+                fixed_take_profit_price = fill_price * (1 + config.fixed_take_profit_percent)
+                self.Debug(f"-------- Fixed Take Profit: {symbol} @ ${fixed_take_profit_price} (Fill Price: ${fill_price} * (1 + {config.fixed_take_profit_percent}))")
+                self.Debug(f"-------- Trailing Take Profit: {symbol} @ ${new_trailing_take_profit_price} (Fill Price: ${fill_price} * (1 + {config.trailing_take_profit_percent}))")
 
                 fixed_stop_loss_level = fill_price * (1 - config.fixed_stop_loss_percent)
-                self.Debug(f"---- Fixed Stop Loss: {symbol} @ ${fixed_stop_loss_level} (Fill Price: ${fill_price} * (1 - {config.fixed_stop_loss_percent}))")
-                self.Debug(f"---- Trailing Stop Loss: {symbol} @ ${new_trailing_stop_price} (Fill Price: ${fill_price} * (1 - {config.trailing_stop_loss_percent}))")
+                self.Debug(f"-------- Fixed Stop Loss: {symbol} @ ${fixed_stop_loss_level} (Fill Price: ${fill_price} * (1 - {config.fixed_stop_loss_percent}))")
+                self.Debug(f"-------- Trailing Stop Loss: {symbol} @ ${new_trailing_stop_price} (Fill Price: ${fill_price} * (1 - {config.trailing_stop_loss_percent}))")
 
             elif orderEvent.Direction == OrderDirection.Sell:
-                self.Debug(f"SELL Order Submitted: {symbol} - ID: {orderEvent.OrderId} - Qty: {fill_qty} * ${fill_price} = ${fill_qty * fill_price}")
-
+                self.Debug(f"---- SELL Order Filled: {symbol} - ID: {orderEvent.OrderId} - Qty: {fill_qty} * ${fill_price} = ${fill_qty * fill_price}")
                 # Retrieve existing trailing stop and take profit prices if any
                 existing_trailing_stop = config.trailing_stop_price.get(symbol, None)
                 if existing_trailing_stop:
-                    self.Debug(f"---- Existing Trailing Stop: {symbol} @ ${existing_trailing_stop}")
+                    self.Debug(f"-------- Trailing Stop: {symbol} @ ${existing_trailing_stop}")
 
                 existing_trailing_take_profit = config.trailing_take_profit_price.get(symbol, None)
                 if existing_trailing_take_profit:
-                    self.Debug(f"---- Existing Trailing Take Profit: {symbol} @ ${existing_trailing_take_profit}")
+                    self.Debug(f"-------- Trailing Take Profit: {symbol} @ ${existing_trailing_take_profit}")
 
     def CancelOldOrders(self):
-        for symbol, config.ticket in config.open_order_tickets.items():
-            if config.ticket is not None and not config.ticket.OrderClosed:
-                order_time = self.Time  # Current algorithm time
-                order_age = (order_time - config.ticket.Time).total_seconds() / 60  # Age in minutes
-                if order_age > config.max_submitted_order_minutes:
-                    config.ticket.Cancel("Order too old")
-                    self.Debug(f"Order {config.ticket.OrderId} for {symbol} cancelled due to timeout")
-                # Log unfilled orders periodically (e.g., every 15 minutes)
-                elif order_age % 15 == 0:
-                    self.Debug(f"Order still pending: {config.ticket.Symbol}, Order Age: {order_age} minutes")
+        try:
+            for symbol, config.ticket in config.open_order_tickets.items():
+                if config.ticket is not None and not config.ticket.OrderClosed:
+                    order_time = self.Time  # Current algorithm time
+                    order_age = (order_time - config.ticket.Time).total_seconds() / 60  # Age in minutes
+                    if order_age > config.max_submitted_order_minutes:
+                        config.ticket.Cancel("Order too old")
+                        self.Debug(f"Order {config.ticket.OrderId} for {symbol} cancelled due to timeout")
+                    # Log unfilled orders periodically (e.g., every 15 minutes)
+                    elif order_age % 15 == 0:
+                        self.Debug(f"Order still pending: {config.ticket.Symbol}, Order Age: {order_age} minutes, Canceling in {config.max_submitted_order_minutes - order_age} minutes...")
+        except Exception as e:
+            self.Error(f"Error on HandleTradeOutcome: {str(e)}") 
+            return False
 
     def HandleTradeOutcome(self, orderEvent):
         try:    
@@ -281,7 +319,7 @@ class CodysAdvancedStrategy(QCAlgorithm):
                 self.UpdateWinProbabilityAndRatio()
 
         except Exception as e:
-            self.Debug(f"Error on HandleTradeOutcome: {str(e)}") 
+            self.Error(f"Error on HandleTradeOutcome: {str(e)}") 
             return False
    
     def UpdateWinProbabilityAndRatio(self):
