@@ -86,7 +86,7 @@ news_feed = {}
 
 # Trading
 trailing_take_profit_price = {} # Calculated after each trade
-trailing_stop_price = {} # Calculated after each trade 
+trailing_stop_loss_price = {} # Calculated after each trade 
 stockSymbols = [] # Holds the stocks in the dynamically filtered Universe
 numberOfStocks = 0  # Number of stocks in stockSymbols
 ticket = None

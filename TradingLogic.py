@@ -114,8 +114,8 @@ def CalculateRisk(self, symbol, data):
     try:
         if symbol in data and data[symbol] is not None and hasattr(data[symbol], 'Price'):            
             stop_loss_price = CalculateStopLossPrice(self, symbol, data)
-            currentPrice = data[symbol].Price
-            risk_per_share = currentPrice - stop_loss_price
+            current_price = data[symbol].Price
+            risk_per_share = current_price - stop_loss_price
             if risk_per_share <= 0:
                 risk_per_share = 0.10
             return risk_per_share
@@ -141,10 +141,10 @@ def CalculateReward(self, symbol, data):
 def CalculateStopLossEquityAmount(self, symbol, data):
     try:
         if symbol in data and data[symbol] is not None and hasattr(data[symbol], 'Price'):            
-            stop_loss_level = CalculateStopLossPrice(self, symbol, data)
+            stop_loss_price = CalculateStopLossPrice(self, symbol, data)
             current_price = data[symbol].Price
-            # The value at risk is the difference between the current price and the stop-loss level, multiplied by the quantity
-            risk_value_per_stock = (current_price - stop_loss_level) * self.Portfolio[symbol].Quantity
+            # The value at risk is the difference between the current price and the stop-loss price, multiplied by the quantity
+            risk_value_per_stock = (current_price - stop_loss_price) * self.Portfolio[symbol].Quantity
             return risk_value_per_stock
         else:
             return None  # Return None if symbol is not in data or data[symbol] is None                        
@@ -158,20 +158,20 @@ def CalculateStopLossPrice(self, symbol, data):
             current_price = data[symbol].Price
 
             # Percentage-based stop loss
-            stop_loss_level_percent = current_price * (1 - config.fixed_stop_loss_percent)
+            stop_loss_percent = current_price * (1 - config.fixed_stop_loss_percent)
 
             # ATR-based stop loss
             atr_value = config.atr[symbol].Current.Value if config.atr[symbol].Current.Value and symbol in config.atr else 0
-            stop_loss_level_atr = current_price - (atr_value * config.stop_loss_atr_multiplier)
+            stop_loss_atr = current_price - (atr_value * config.stop_loss_atr_multiplier)
 
             # Trailing stop loss
-            trailing_stop_loss_level = current_price * (1 - config.trailing_stop_loss_percent)
-            if symbol in config.trailing_stop_price:
-                trailing_stop_loss_level = max(trailing_stop_loss_level, config.trailing_stop_price[symbol])
+            trailing_stop_loss_price = current_price * (1 - config.trailing_stop_loss_percent)
+            if symbol in config.trailing_stop_loss_price:
+                trailing_stop_loss_price = max(trailing_stop_loss_price, config.trailing_stop_loss_price[symbol])
 
             # Combining methods: Choose the largest of the three for the most conservative stop-loss
-            combined_stop_loss_level = max(stop_loss_level_percent, stop_loss_level_atr, trailing_stop_loss_level)
-            return combined_stop_loss_level
+            combined_stop_loss_price = max(stop_loss_percent, stop_loss_atr, trailing_stop_loss_price)
+            return combined_stop_loss_price
         else:
             return None  # Return None if symbol is not in data or data[symbol] is None
     except Exception as e:
@@ -182,16 +182,16 @@ def CalculateTakeProfitPrice(self, symbol, data):
     try:
         if symbol in data and data[symbol] is not None and hasattr(data[symbol], 'Price'):            
             current_price = data[symbol].Price
-            # Fixed take profit level based on a percentage
+            # Fixed take profit price based on a percentage
             fixed_take_profit_price = current_price * (1 + config.fixed_take_profit_percent)
             # Fibonacci levels with ATR
             atr_value = config.atr[symbol].Current.Value if symbol in config.atr else 0
             fibonacci_retracement_levels = [0.236, 0.382, 0.618]  # Example Fibonacci levels
             fibonacci_take_profit_prices = [current_price * (1 + level) for level in fibonacci_retracement_levels]
             fib_atr_take_profit_price = min(fibonacci_take_profit_prices) + atr_value
-            # Use the trailing take profit level updated in OnData
+            # Use the trailing take profit price updated in OnData
             trailing_take_profit_price = config.trailing_take_profit_price.get(symbol, current_price * (1 + config.trailing_take_profit_percent))
-            # Combine methods: Choose the most conservative (highest) take-profit level
+            # Combine methods: Choose the most conservative (highest) take-profit price
             combined_take_profit_price = max(fixed_take_profit_price, fib_atr_take_profit_price, trailing_take_profit_price)
             return combined_take_profit_price
         else:
