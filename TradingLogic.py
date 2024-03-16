@@ -19,15 +19,15 @@ def ShouldBuy(self, symbol, data):
             reward_per_share = CalculateReward(self, symbol, data)
             if risk_per_share is None or reward_per_share is None:
                 return False  # Can't proceed if risk or reward can't be calculated
-            is_acceptable_risk_reward = (reward_per_share / risk_per_share) >= 2 if config.enable_risk_reward else True
+            is_acceptable_risk_reward = (reward_per_share / risk_per_share) >= 2 if config.risk_reward_condition else True
 
             # Decision variables
-            is_ema_crossover = short_ema_current > long_ema_current if config.enable_ema_crossover else True
-            is_short_ema_rising = short_ema_current > short_ema_previous if config.enable_short_ema_rising else True
+            is_ema_crossover = short_ema_current > long_ema_current if config.ema_crossover_condition else True
+            is_short_ema_rising = short_ema_current > short_ema_previous if config.short_ema_rising_condition else True
             is_ema_distance_widening = (short_ema_current - long_ema_current) > (short_ema_previous - long_ema_previous) if config.enable_ema_distance_widening else True
-            is_rsi_bullish = rsi_value > config.rsi_min_threshold if config.enable_rsi_bullish else True
-            is_stochastic_rsi_bullish = config.stochastic_rsi[symbol].IsReady and config.stochastic_rsi[symbol].Current.Value > config.stochastic_rsi_min_threshold if config.enable_stochastic_rsi_bullish else True
-            is_macd_bullish = macd.Current.Value > macd.Signal.Current.Value if config.enable_macd_bullish else True
+            is_rsi_bullish = rsi_value > config.rsi_min_threshold if config.rsi_strong_condition else True
+            is_stochastic_rsi_bullish = config.stochastic_rsi[symbol].IsReady and config.stochastic_rsi[symbol].Current.Value > config.stochastic_rsi_min_threshold if config.stochastic_rsi_strong_condition else True
+            is_macd_bullish = macd.Current.Value > macd.Signal.Current.Value if config.macd_cross_above_signal_condition else True
 
             # Calculate potential value at risk
             potential_share_qty_to_buy = CalculatePotentialSharesQuantityToBuy(self, risk_per_share)
@@ -161,8 +161,11 @@ def CalculateStopLossPrice(self, symbol, data):
             stop_loss_percent = current_price * (1 - config.fixed_stop_loss_percent)
 
             # ATR-based stop loss
-            atr_value = config.atr[symbol].Current.Value if config.atr[symbol].Current.Value and symbol in config.atr else 0
-            stop_loss_atr = current_price - (atr_value * config.stop_loss_atr_multiplier)
+            if config.atr_stop_loss_condition:
+                atr_value = config.atr[symbol].Current.Value if config.atr[symbol].Current.Value and symbol in config.atr else 0
+                atr_stop_loss_price = current_price - (atr_value * config.atr_stop_loss_price_multiplier)
+            else:
+                atr_stop_loss_price = 0
 
             # Trailing stop loss
             trailing_stop_loss_price = current_price * (1 - config.trailing_stop_loss_percent)
@@ -170,7 +173,7 @@ def CalculateStopLossPrice(self, symbol, data):
                 trailing_stop_loss_price = max(trailing_stop_loss_price, config.trailing_stop_loss_price[symbol])
 
             # Combining methods: Choose the largest of the three for the most conservative stop-loss
-            combined_stop_loss_price = max(stop_loss_percent, stop_loss_atr, trailing_stop_loss_price)
+            combined_stop_loss_price = max(stop_loss_percent, atr_stop_loss_price, trailing_stop_loss_price)
             return combined_stop_loss_price
         else:
             return None  # Return None if symbol is not in data or data[symbol] is None
