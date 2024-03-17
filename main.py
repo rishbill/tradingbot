@@ -4,9 +4,11 @@
 # Stocks = Symbols = Securities
 
 from AlgorithmImports import *
-from TradingLogic import *
+from shouldBuy import *
+from shouldSell import *
 import numpy as np
-import config
+import config as c
+import variables as v
 import collections
 
 class CodysAdvancedStrategy(QCAlgorithm):
@@ -14,79 +16,21 @@ class CodysAdvancedStrategy(QCAlgorithm):
     # Main function for class
 
         # Initialize Variables
-        config.SetStartDate(self)
-        config.SetCash(self)
-        config.SetWarmUp(self)
-        config.SetBrokerageModel(self)       
+        c.SetStartDate(self)
+        c.SetCash(self)
+        c.SetWarmUp(self)
+        self.EnableAutomaticIndicatorWarmUp = True
+        c.SetBrokerageModel(self)       
         portfolio_value = self.Portfolio.TotalPortfolioValue
         stock_counts_per_sector = self.CalculateStockCountsPerSector()
         total_invested_stocks = sum(stock_counts_per_sector.values())
-        self.warmup_counter = 0 # Increments for each warmup day, to check warmup progress
-        self.last_increment_day = None # Used to calculate warmup_counter
-        self.day_trade_dates = collections.deque(maxlen=5)  # Stores dates of last 5 day trades
-        self.day_trade_counter = 0
-
-        # Technical Indicators
-        self.stochastic_rsi = {} # See config.py
-        self.ema_short = {}
-        self.ema_long = {}
-        self.atr = {}
-
-        # Sell Conditions
-        self.trailing_take_profit_price = {} # Updated after each trade
-        self.trailing_stop_loss_price = {} # Updated after each trade 
-
-        # Stocks
-        self.active_stock_symbols = [] # Holds the stocks in the dynamically filtered Universe
-        self.count_active_stock_symbols = 0  # Number of stocks in active_stock_symbols
-        self.unique_portfolio_stocks = set()
-        self.sector_allocation = {}
-
-        # Orders        
-        self.order_ticket = None
-        self.open_order_tickets = {}
-
-        # Profit/Loss (P/L) Sell Results
-        self.win_count = 0
-        self.loss_count = 0
-        self.total_profit = 0
-        self.total_loss = 0            
-
-        # Debug Values from config.py
-        self.Debug("Basic parameters:")
-        self.Debug(f"---- Initial Capital -------------------------- ${self.Portfolio.Cash}")
-        self.Debug(f"---- Start Date ------------------------------- {self.StartDate}")
-        self.Debug(f"---- End Date --------------------------------- {self.EndDate}")
-        self.Debug(f"---- Warm Up ---------------------------------- {config.warmup_period} Days")
-        self.Debug("Indicator Variables:")
-        self.Debug("---- Initialized Indicator Variables: self.ema_short, self.ema_long, self.atr, self.stochastic_rsi")
-        self.Debug("News and Sentiment Variables:")
-        self.Debug("---- Initialized News and Sentiment Variables: config.news_feed")
-        self.Debug("Trading Variables:")
-        self.Debug(f"---- Max Portfolio At Risk --------------------- {config.max_portfolio_invested_percent * 100}%")
-        self.Debug(f"---- Max Portfolio % Per Trade ----------------- {config.max_trade_portfolio_percent * 100}%")
-        self.Debug(f"---- Fixed Take Profit % ----------------------- {config.fixed_take_profit_percent * 100}%")
-        self.Debug(f"---- Fixed Take Profit % Gain ------------------ {config.fixed_take_profit_percent_gain * 100}%")
-        self.Debug(f"---- Fixed Take Profit % To Sell --------------- {config.fixed_take_profit_percent_to_sell * 100}%")
-        self.Debug(f"---- Fixed Stop Loss % ------------------------- {config.fixed_stop_loss_percent * 100}%")
-        self.Debug(f"---- Stop Loss ATR Multiplier ------------------ {config.stop_loss_atr_multiplier}")
-        self.Debug(f"---- Trailing Stop Loss % ---------------------- {config.trailing_stop_loss_percent * 100}%")  
-        self.Debug("Portfolio Summary:")
-        self.Debug(f"---- Portfolio Value ----------------------------- ${portfolio_value}")
-        if total_invested_stocks == 0:
-            self.Debug("---- No invested stocks in portfolio")
-        else:
-            for sector, count in stock_counts_per_sector.items():
-                sector_portfolio_value = self.CalculateSectorPortfolioValue(sector)
-                percentage_of_portfolio = (sector_portfolio_value / portfolio_value) * 100
-                self.Debug(f"---- Sector: {sector}, Count: {count}, Value: ${sector_portfolio_value}, % of Portfolio: {percentage_of_portfolio:.2f}%")
 
         # Universe Filtering
-        self.max_stock_price = self.Portfolio.TotalPortfolioValue * config.max_stock_price_portfolio_percent # Limit max stock price to X% of portfolio size, for affordability
+        self.max_stock_price = self.Portfolio.TotalPortfolioValue * c.max_stock_price_portfolio_percent # Limit max stock price to X% of portfolio size, for affordability
         self.Debug("Universe filter variables:")
-        self.Debug(f"------- Stock Price Range ------------------------- ${config.min_stock_price} - ${self.max_stock_price}")
-        self.Debug(f"------- P/E Ratio Range --------------------------- {config.min_pe_ratio} to {config.max_pe_ratio}")
-        self.Debug(f"------- Min Revenue Growth ------------------------ {config.min_revenue_growth_percent}")
+        self.Debug(f"------- Stock Price Range ------------------------- ${c.min_stock_price} - ${self.max_stock_price}")
+        self.Debug(f"------- P/E Ratio Range --------------------------- {c.min_pe_ratio} to {c.max_pe_ratio}")
+        self.Debug(f"------- Min Revenue Growth ------------------------ {c.min_revenue_growth_percent}")
         try:
             self.Debug(f"Filtering Universe...")
             self.UniverseSettings.Resolution = Resolution.Minute
@@ -97,11 +41,11 @@ class CodysAdvancedStrategy(QCAlgorithm):
     def UniverseFilter(self, fundamental: List[Fundamental]) -> List[Symbol]:
     # Returns a filtered list of stocks,  dynamically re-filtered daily   
         try:
-            filtered = [f for f in fundamental if f.HasFundamentalData and config.min_stock_price <= f.Price < self.max_stock_price and f.ValuationRatios.PERatio > config.min_pe_ratio and f.ValuationRatios.PERatio < config.max_pe_ratio and f.OperationRatios.RevenueGrowth.OneYear > config.min_revenue_growth_percent and not np.isnan(f.ValuationRatios.PERatio) and not np.isnan(f.OperationRatios.RevenueGrowth.OneYear) and not np.isnan(f.DollarVolume) and not np.isnan(f.MarketCap) and f.ValuationRatios.PERatio != 0 and f.OperationRatios.RevenueGrowth.OneYear != 0 and f.DollarVolume != 0 and f.MarketCap != 0]
+            filtered = [f for f in fundamental if f.HasFundamentalData and c.min_stock_price <= f.Price < self.max_stock_price and f.ValuationRatios.PERatio > c.min_pe_ratio and f.ValuationRatios.PERatio < c.max_pe_ratio and f.OperationRatios.RevenueGrowth.OneYear > c.min_revenue_growth_percent and not np.isnan(f.ValuationRatios.PERatio) and not np.isnan(f.OperationRatios.RevenueGrowth.OneYear) and not np.isnan(f.DollarVolume) and not np.isnan(f.MarketCap) and f.ValuationRatios.PERatio != 0 and f.OperationRatios.RevenueGrowth.OneYear != 0 and f.DollarVolume != 0 and f.MarketCap != 0]
             sortedByDollarVolume = sorted(filtered, key=lambda f: f.DollarVolume, reverse=True)[:10]
             sortedByPeRatio = sorted(sortedByDollarVolume, key=lambda f: f.ValuationRatios.PERatio, reverse=False)[:10]
             
-            if self.warmup_counter >= config.warmup_period + 1:
+            if self.warmup_counter >= c.warmup_period + 1:
                 try:
                     self.filteredSymbolsDetails = [(f.Symbol, f.Price, f.DollarVolume, f.ValuationRatios.PERatio, f.OperationRatios.RevenueGrowth.OneYear, f.MarketCap, f.AssetClassification.MorningstarSectorCode, f.AssetClassification.MorningstarIndustryCode, f.CompanyReference.ShortName) for f in sortedByPeRatio]
                 except Exception as e:
@@ -118,7 +62,7 @@ class CodysAdvancedStrategy(QCAlgorithm):
             stock_counts_per_sector = {} # Initialize list variable
             for symbol in self.Portfolio.Keys: # Iterate over all stocks in portfolio
                 if self.Portfolio[symbol].Invested: # If the portfolio is invested in this stock
-                    sector = config.GetSectorForStock(symbol) # Get the sector for this stock
+                    sector = c.GetSectorForStock(symbol) # Get the sector for this stock
                     if sector: # If sector was returned
                         stock_counts_per_sector[sector] = stock_counts_per_sector.get(sector, 0) + 1 # Increment the number of stocks for this sector 
             return stock_counts_per_sector # Return the  list of stock counts per sector
@@ -163,38 +107,7 @@ class CodysAdvancedStrategy(QCAlgorithm):
         except Exception as e:
             self.Error(f"Error on CalculateSectorPortfolioValue: {str(e)}")        
 
-    def OnSecuritiesChanged(self, changes):
-    # Runs when new symbols  
-        # Preview up to 10 symbols that are AddedSecurities and include the current timestamp
-        current_timestamp = self.Time.strftime("%Y-%m-%d")
-        added_symbols_preview = [security.Symbol for security in changes.AddedSecurities[:10]]
-        self.Debug(f"{current_timestamp} - Universe Updated +{len(changes.AddedSecurities)}: {', '.join(str(symbol) for symbol in added_symbols_preview)}")
-        # Adjust indicators and news feed for added and removed securities
-        try: 
-            for security in changes.AddedSecurities:
-                symbol = security.Symbol
-                if symbol not in self.active_stock_symbols:
-                    self.active_stock_symbols.append(symbol)
-                config.numberOfStocks = len(self.active_stock_symbols)    
-                # Create and register indicators for each added symbol
-                self.ema_short[symbol] = self.EMA(symbol, self.ema_short_periods, Resolution.Minute)
-                self.ema_long[symbol] = self.EMA(symbol, self.ema_long_periods, Resolution.Minute)
-                self.atr[symbol] = self.ATR(symbol, self.atr_periods, MovingAverageType.Wilders, Resolution.Minute)
-                # Create and register the Stochastic RSI indicator for this symbol
-                self.stochastic_rsi[symbol] = self.STO(symbol, self.stochastic_rsi_periods, Resolution.Minute)  # Create Stochastic RSI
-                self.RegisterIndicator(symbol, self.stochastic_rsi[symbol], Resolution.Minute)
-            for security in changes.RemovedSecurities:
-                symbol = security.Symbol
-                if symbol in self.active_stock_symbols:
-                    self.active_stock_symbols.remove(symbol)
-                # Remove indicators for removed symbols
-                if symbol in self.ema_short: del self.ema_short[symbol]
-                if symbol in self.ema_long: del self.ema_long[symbol]
-                if symbol in self.atr: del self.atr[symbol]
-                if symbol in self.stochastic_rsi: del self.stochastic_rsi[symbol]
-                if symbol in config.news_feed: self.RemoveSecurity(symbol)
-        except Exception as e:
-            self.Error(f"Error on OnSecuritiesChanged: {str(e)}")
+
 
     def OnData(self, data):
     # Runs upon receipt of every bar/candle for the filtered stocks
@@ -202,16 +115,37 @@ class CodysAdvancedStrategy(QCAlgorithm):
         if self.IsWarmingUp:
             if self.last_increment_day != current_day:
                 self.warmup_counter += 1
-                self.last_increment_day = current_day     
+                self.last_increment_day = current_day
         else:               
             for symbol in self.active_stock_symbols:
                 if not data.ContainsKey(symbol):
                     # Skip this symbol if it's not present in the current Slice
                     continue
                 try:
-                    if ShouldBuy(self, symbol, data):
-                        limit_price_to_buy = data[symbol].Close * config.buy_limit_order_percent
-                        fraction_of_portfolio = 1 / config.numberOfStocks
+                    # Update Indicators
+                    v.current_price = data[symbol].Price
+                    v.current_close_price = data[symbol].Close
+                    v.symbol_history[symbol] = self.History(["SPY"], 30, Resolution.Daily)
+                    v.lowest_price_30_days[symbol] = v.symbol_history[symbol]['low']
+
+                    if v.atr_data.IsReady:
+                        v.atr = v.atr_data[symbol].Current.Value
+                    if v.ema_short_data.IsReady:    
+                        v.short_ema = v.ema_short_data[symbol].Current.Value
+                        v.short_ema_previous = v.ema_short_data[symbol].Previous.Value
+                    if v.ema_long_data.IsReady:    
+                        v.long_ema = v.ema_long_data[symbol].Current.Value
+                        v.long_ema_previous = v.ema_long_data[symbol].Previous.Value
+                    if v.rsi_data.IsReady:    
+                        v.rsi = v.rsi_data[symbol].Current.Value
+                    if v.stochastic_rsi_data.IsReady:    
+                        v.stochastic_rsi = v.stochastic_rsi_data[symbol].Current.Value
+                    if v.macd_data.IsReady:    
+                        v.macd = v.macd_data[symbol].Current.Value
+
+                    if shouldBuy(self, symbol, data):
+                        limit_price_to_buy = data[symbol].Close * c.buy_limit_order_percent
+                        fraction_of_portfolio = 1 / c.numberOfStocks
                         total_cash_to_spend = self.Portfolio.Cash * fraction_of_portfolio
                         quantity_to_buy = total_cash_to_spend / limit_price_to_buy
                         quantity_to_buy = max(1, round(quantity_to_buy))  # Ensure at least one unit is bought
@@ -222,22 +156,22 @@ class CodysAdvancedStrategy(QCAlgorithm):
                         # Calculate the value at risk for this position
                         current_price = data[symbol].Price
                         if symbol not in self.trailing_take_profit_price:
-                            self.trailing_take_profit_price[symbol] = current_price * (1 + config.trailing_take_profit_percent)
+                            self.trailing_take_profit_price[symbol] = current_price * (1 + c.trailing_take_profit_percent)
                         else:
                             # Update the trailing take profit if the price moves up
-                            if current_price > self.trailing_take_profit_price[symbol] / (1 + config.trailing_take_profit_percent):
-                                self.trailing_take_profit_price[symbol] = current_price * (1 + config.trailing_take_profit_percent)
-                        if symbol not in self.trailing_stop_loss_price:
+                            if current_price > self.trailing_take_profit_price[symbol] / (1 + c.trailing_take_profit_percent):
+                                self.trailing_take_profit_price[symbol] = current_price * (1 + c.trailing_take_profit_percent)
+                        if symbol not in v.trailing_stop_price:
                             # Initialize trailing stop loss price if it doesn't exist
-                            self.trailing_stop_loss_price[symbol] = current_price * (1 - config.trailing_stop_loss_percent)
+                            v.trailing_stop_price[symbol] = current_price * (1 - c.sell_parameter_trailing_stop_percent)
                         else:
                             # Update the trailing stop loss if the price moves up
-                            if current_price > self.trailing_stop_loss_price[symbol]:
-                                self.trailing_stop_loss_price[symbol] = current_price * (1 - config.trailing_stop_loss_percent)
+                            if current_price > v.trailing_stop_price[symbol]:
+                                v.trailing_stop_price[symbol] = current_price * (1 - c.sell_parameter_trailing_stop_percent)
                     # Check for Sell condition
-                    if self.Portfolio[symbol].Invested and ShouldSell(self, symbol, data):
+                    if self.Portfolio[symbol].Invested and shouldSell(self, symbol, data):
                         holdings = self.Portfolio[symbol].Quantity
-                        self.order_ticket = self.MarketOrder(symbol, -holdings * config.fixed_take_profit_percent_to_sell)
+                        self.order_ticket = self.MarketOrder(symbol, -holdings * c.fixed_take_profit_percent_to_sell)
                         self.open_order_tickets[symbol] = self.order_ticket
                 except Exception as e:
                     self.Debug(f"Error on OnData: {str(e)}")  
@@ -251,52 +185,52 @@ class CodysAdvancedStrategy(QCAlgorithm):
 
         # Day trade tracking
         order_type = 'buy' if orderEvent.Direction == OrderDirection.Buy else 'sell'
-        if symbol not in config.day_trades:
-            config.day_trades[symbol] = {'buy': False, 'sell': False, 'date': None}
+        if symbol not in c.day_trades:
+            c.day_trades[symbol] = {'buy': False, 'sell': False, 'date': None}
 
-        if config.day_trades[symbol]['date'] == current_date:
+        if c.day_trades[symbol]['date'] == current_date:
             # Check for day trade (buy and sell on the same day)
-            if (order_type == 'sell' and config.day_trades[symbol]['buy']) or (order_type == 'buy' and config.day_trades[symbol]['sell']):
+            if (order_type == 'sell' and c.day_trades[symbol]['buy']) or (order_type == 'buy' and c.day_trades[symbol]['sell']):
                 self.day_trade_dates.append(current_date)
                 self.day_trade_counter += 1
                 self.Debug(f"Day Trade Detected for {symbol} on {current_date}. Total Day Trades in last 5 days: {len(self.day_trade_dates)}")
                 # Reset the day trade flags for this stock
-                config.day_trades[symbol] = {'buy': False, 'sell': False, 'date': None}
+                c.day_trades[symbol] = {'buy': False, 'sell': False, 'date': None}
         else:
             # Record this trade action
-            config.day_trades[symbol][order_type] = True
-            config.day_trades[symbol]['date'] = current_date
+            c.day_trades[symbol][order_type] = True
+            c.day_trades[symbol]['date'] = current_date
 
-        self.unique_portfolio_stocks.clear()
 
         if orderEvent.Status == OrderStatus.Submitted:
             self.Debug(f"Order Submitted: {symbol} - ID: {orderEvent.OrderId} - Qty: {fill_qty} * ${fill_price} = ${fill_qty * fill_price}")
-
+        
         # Add all currently invested stocks to the unique_portfolio_stocks
-        self.unique_portfolio_stocks = {s for s, holding in self.Portfolio.items() if holding.Invested}
-        self.Debug(f"Updated unique portfolio stocks: {self.unique_portfolio_stocks}")
+        v.unique_portfolio_stocks.clear()        
+        v.unique_portfolio_stocks = {s for s, holding in self.Portfolio.items() if holding.Invested}
+        self.Debug(f"Updated unique portfolio stocks: {v.unique_portfolio_stocks}")
 
         if orderEvent.Status == OrderStatus.Filled:
             if orderEvent.Direction == OrderDirection.Buy:
                 self.Debug(f"---- BUY Order Filled: {symbol} - ID: {orderEvent.OrderId} - Qty: {fill_qty} * ${fill_price} = ${fill_qty * fill_price}")
                 self.HandleTradeOutcome(orderEvent)
-                new_trailing_stop_loss_price = fill_price * (1 - config.trailing_stop_loss_percent)
-                self.trailing_stop_loss_price[symbol] = new_trailing_stop_loss_price
-                new_trailing_take_profit_price = fill_price * (1 + config.trailing_take_profit_percent)
+                new_trailing_stop_price = fill_price * (1 - c.sell_parameter_trailing_stop_percent)
+                v.trailing_stop_price[symbol] = new_trailing_stop_price
+                new_trailing_take_profit_price = fill_price * (1 + c.trailing_take_profit_percent)
                 self.trailing_take_profit_price[symbol] = new_trailing_take_profit_price
 
-                fixed_take_profit_price = fill_price * (1 + config.fixed_take_profit_percent)
-                self.Debug(f"-------- Fixed Take Profit: {symbol} @ ${fixed_take_profit_price} (Fill Price: ${fill_price} * (1 + {config.fixed_take_profit_percent}))")
-                self.Debug(f"-------- Trailing Take Profit: {symbol} @ ${new_trailing_take_profit_price} (Fill Price: ${fill_price} * (1 + {config.trailing_take_profit_percent}))")
+                fixed_take_profit_price = fill_price * (1 + c.fixed_take_profit_percent)
+                self.Debug(f"-------- Fixed Take Profit: {symbol} @ ${fixed_take_profit_price} (Fill Price: ${fill_price} * (1 + {c.fixed_take_profit_percent}))")
+                self.Debug(f"-------- Trailing Take Profit: {symbol} @ ${new_trailing_take_profit_price} (Fill Price: ${fill_price} * (1 + {c.trailing_take_profit_percent}))")
 
-                fixed_stop_loss_price = fill_price * (1 - config.fixed_stop_loss_percent)
-                self.Debug(f"-------- Fixed Stop Loss: {symbol} @ ${fixed_stop_loss_price} (Fill Price: ${fill_price} * (1 - {config.fixed_stop_loss_percent}))")
-                self.Debug(f"-------- Trailing Stop Loss: {symbol} @ ${new_trailing_stop_loss_price} (Fill Price: ${fill_price} * (1 - {config.trailing_stop_loss_percent}))")
+                fixed_stop_loss_price = fill_price * (1 - c.fixed_stop_loss_percent)
+                self.Debug(f"-------- Fixed Stop Loss: {symbol} @ ${fixed_stop_loss_price} (Fill Price: ${fill_price} * (1 - {c.fixed_stop_loss_percent}))")
+                self.Debug(f"-------- Trailing Stop Loss: {symbol} @ ${new_trailing_stop_price} (Fill Price: ${fill_price} * (1 - {c.sell_parameter_trailing_stop_percent}))")
 
             elif orderEvent.Direction == OrderDirection.Sell:
                 self.Debug(f"---- SELL Order Filled: {symbol} - ID: {orderEvent.OrderId} - Qty: {fill_qty} * ${fill_price} = ${fill_qty * fill_price}")
                 # Retrieve existing trailing stop and take profit prices if any
-                existing_trailing_stop = self.trailing_stop_loss_price.get(symbol, None)
+                existing_trailing_stop = v.trailing_stop_price.get(symbol, None)
                 if existing_trailing_stop:
                     self.Debug(f"-------- Trailing Stop Loss: {symbol} @ ${existing_trailing_stop}")
 
@@ -310,12 +244,12 @@ class CodysAdvancedStrategy(QCAlgorithm):
                 if self.order_ticket is not None and not self.order_ticket.OrderClosed:
                     order_time = self.Time  # Current algorithm time
                     order_age = (order_time - self.order_ticket.Time).total_seconds() / 60  # Age in minutes
-                    if order_age > config.max_submitted_order_minutes:
+                    if order_age > c.max_submitted_order_minutes:
                         self.order_ticket.Cancel("Order too old")
                         self.Debug(f"Order {self.order_ticket.OrderId} for {symbol} cancelled due to timeout")
                     # Log unfilled orders periodically (e.g., every 15 minutes)
                     elif order_age % 15 == 0:
-                        self.Debug(f"Order still pending: {self.order_ticket.Symbol}, Order Age: {order_age} minutes, Canceling in {config.max_submitted_order_minutes - order_age} minutes...")
+                        self.Debug(f"Order still pending: {self.order_ticket.Symbol}, Order Age: {order_age} minutes, Canceling in {c.max_submitted_order_minutes - order_age} minutes...")
         except Exception as e:
             self.Error(f"Error on HandleTradeOutcome: {str(e)}") 
             return False
