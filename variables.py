@@ -1,20 +1,27 @@
 # Begin variables.py
-# This module is used for storing NON-CONFIGURABLE variables. These are dynamically populated, calculated, or updated throughout the algorithm across modules.
+# This module stores dynamic, non-configurable variables used across the algorithm.
+
 import collections
 
-warmup_counter = 0 # Increments for each warmup day, to check warmup progress
-last_increment_day = None # Used to calculate warmup_counter
-day_trade_dates = collections.deque(maxlen=5)  # Stores dates of last 5 day trades
-day_trade_counter = 0
+# Algorithm Initialization
+day_trade_counter = 0  # Counts day trades
+day_trade_dates = collections.deque(maxlen=5)  # Dates of last 5 day trades
+last_increment_day = None  # Last day warmup counter was incremented
+warmup_counter = 0  # Tracks warmup progress
+daily_transactions = {}  # Track daily buys and sells for each security
+current_date = {}
 
 # Technical Indicators
-rsi_data = {}
-stochastic_rsi_data = {} # Updated during main.OnSecuritiesChange and 
-ema_short_data = {}
-ema_long_data = {}
+     # Stores technical indicator data. Updates with each OnSecuritiesChanged and OnData slice.
 atr_data = {}
+ema_long_data = {}
+ema_short_data = {}
 macd_data = {}
-current_price = {}
+rsi_data = {}
+stochastic_rsi_data = {}
+
+    # Stores technical indicator data. Updates with each stock in OnData.
+current_price = {} 
 current_close_price = {}
 atr = {}
 short_ema = {}
@@ -26,40 +33,53 @@ stochastic_rsi = {}
 macd = {}
 
 # Buy Conditions
-buy_limit_price = {}
+buy_limit_price = {} # Updated with each OnData slice through shouldBuy.
 
-# Sell Conditions - 
-take_profit_percent_price = {} # Updated after each trade
-trailing_stop_price = {} # Updated after each trade 
-stop_loss_percent_price = {}
-atr_stop_loss_price = {}
-max_stop_loss_price = {}
-trailing_take_profit_price = {}
-fibonacci_stop_loss_prices = []
-fib_atr_stop_loss_price = {}
-fibonacci_take_profit_prices = []
-fib_atr_take_profit_price = {}
-max_take_profit_price = {}
-max_profit_reward_per_share = {}
+# Sell Conditions
 max_loss_risk_per_share = {}
+max_profit_reward_per_share = {}
+stop_loss_atr_price = {}
+stop_loss_fib_atr_price = {}
+stop_loss_fibonacci_prices = []
+stop_loss_max_price = {}
+stop_loss_percent_price = {}
+stop_loss_trailing_price = {}
+take_profit_atr_price = {}
+take_profit_fib_atr_price = {}
+take_profit_fibonacci_prices = []
+take_profit_max_price = {}
+take_profit_percent_price = {}
+take_profit_trailing_price = {}
 
 # Stocks
-active_stock_symbols = [] # Holds the stocks in the dynamically filtered Universe
-count_active_stock_symbols = 0  # Number of stocks in active_stock_symbols
+active_stock_symbols = []  # Stocks in filtered universe
+count_active_stock_symbols = 0
 unique_portfolio_stocks = set()
 sector_allocation = {}
-unique_portfolio_stocks = set()
+unique_portfolio_sectors = set()
 symbol_history = {}
 lowest_price_30_days = {}
+sector_portfolio_value = {}
+stock_counts_per_sector = {}
+symbol_sector = {}
+portfolio_percent_per_sector = {}
+biggest_portfolio_sector = {}
+max_stock_price = 0
 
-# Orders        
+# Orders
 order_ticket = None
 open_order_tickets = {}
+position_size_share_qty_to_buy = 0
+latest_order_ticket = {}
 
-# Profit/Loss (P/L) Sell Results
-win_count = 0
-loss_count = 0
+# Profit/Loss Sell Results
+average_buy_price = {}
+trade_win_count = 0
+trade_loss_count = 0
 total_profit = 0
-total_loss = 0            
+total_loss = 0
+kelly_criterion = 0
+win_probability = 0
+win_loss_ratio = 0
 
 # End variables.py
