@@ -53,7 +53,6 @@ take_profit_trailing_price = {}
 
 # Stocks
 active_stock_symbols = []  # Stocks in filtered universe
-count_active_stock_symbols = 0
 unique_portfolio_stocks = set()
 sector_allocation = {}
 unique_portfolio_sectors = set()

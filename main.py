@@ -28,8 +28,10 @@ class CodysAdvancedStrategy(QCAlgorithm):
         self.onDataHandler = OnDataHandler(self)
         self.onOrderEventHandler = OnOrderEventHandler(self)
         self.onSecuritiesChangedHandler = OnSecuritiesChangedHandler(self)
-        v.stock_counts_per_sector = sectorAnalysis.calculateStockCountsPerSector()
+        v.stock_counts_per_sector = sectorAnalysis.calculateStockCountsPerSector(self)
         total_invested_stocks = sum(v.stock_counts_per_sector.values())
+        v.max_stock_price = self.Portfolio.TotalPortfolioValue * c.stock_filter_parameter_max_stock_price_portfolio_percent 
+            # Limit max stock price to x% of portfolio size, for affordability.
 
         self.Debug("Basic parameters:")
         self.Debug(f"---- Initial Capital -------------------------- ${self.Portfolio.Cash}")
@@ -42,36 +44,31 @@ class CodysAdvancedStrategy(QCAlgorithm):
         self.Debug("---- Initialized News and Sentiment Variables: c.news_feed")
         self.Debug("Portfolio Summary:")
         self.Debug(f"---- Portfolio Value ----------------------------- ${self.Portfolio.TotalPortfolioValue}")
-
         if total_invested_stocks == 0:
             self.Debug("---- No invested stocks in portfolio")
         else:
             for sector, count in v.stock_counts_per_sector.items():
-                sector_portfolio_value = self.CalculateSectorPortfolioValue(sector)
+                sector_portfolio_value = sectorAnalysis.calculatePortfolioValueForSector(self, sector)
                 percentage_of_portfolio = (sector_portfolio_value / self.Portfolio.TotalPortfolioValue)
                 self.Debug(f"---- Sector: {sector}, Count: {count}, Value: ${sector_portfolio_value}, % of Portfolio: {percentage_of_portfolio:.2f}%")
-
-        # Set Universe settings
-        self.UniverseSettings.Resolution = Resolution.Minute
-
-        # Define UniverseFilter as a closure
-        def UniverseFilter(fundamental: List[Fundamental]) -> List[Symbol]:
-            return self.SelectSymbols(fundamental)
-
-        # Add Universe
-        self.AddUniverse(UniverseFilter)
-
-    def filterUniverseStocks(self, fundamental: List[Fundamental]) -> List[Symbol]:
-    # Returns a filtered_stocks list of stocks,  dynamically re-filtered_stocks daily   
-        v.max_stock_price = self.Portfolio.TotalPortfolioValue * c.stock_filter_parameter_max_stock_price_portfolio_percent 
-            # Limit max stock price to x% of portfolio size, for affordability.
-        
         self.Debug("Universe filter variables:")
         self.Debug(f"------- Stock Price Range ------------------------- ${c.stock_filter_parameter_min_price} - ${v.max_stock_price}")
         self.Debug(f"------- P/E Ratio Range --------------------------- {c.stock_filter_parameter_min_pe_ratio} to {c.stock_filter_parameter_max_pe_ratio}")
         self.Debug(f"------- Min Revenue Growth ------------------------ {c.stock_filter_parameter_min_revenue_growth_percent}")
         self.Debug(f"Filtering Universe...")
             
+        # Set Universe settings
+        self.UniverseSettings.Resolution = Resolution.Minute
+
+        # Define UniverseFilter as a closure
+        def UniverseFilter(fundamental: List[Fundamental]) -> List[Symbol]:
+            return self.filterUniverseStocks(fundamental)
+
+        # Add Universe
+        self.AddUniverse(UniverseFilter)
+
+    def filterUniverseStocks(self, fundamental: List[Fundamental]) -> List[Symbol]:
+    # Returns a filtered_stocks list of stocks,  dynamically re-filtered_stocks daily   
         try:
             # Filtering stocks based on fundamental criteria
             filtered_stocks = [
