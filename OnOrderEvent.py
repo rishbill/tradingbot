@@ -27,7 +27,7 @@ class OnOrderEventHandler:
                 v.unique_portfolio_sectors = sectorAnalysis.getUniquePortfolioSectors(self)
                     # Update list of unique sectors in portfolio.
 
-                v.sector_portfolio_value[symbol] = sectorAnalysis.calculatePortfolioValueForSector(self, symbol.AssetClassification.MorningstarSectorCode)
+                v.sector_portfolio_value[symbol] = sectorAnalysis.calculatePortfolioValueForSector(self, self.algorithm.Securities[symbol].Fundamentals.AssetClassification.MorningstarSectorCode)
                     # Update new portfolio value for this order's sector.
                 
                 for sector in v.unique_portfolio_sectors:

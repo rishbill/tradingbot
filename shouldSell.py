@@ -76,8 +76,9 @@ def shouldSell(self, symbol, data):
                 return False, None
 
         else:
-            self.Debug(f"Error on shouldSell: {str(e)}")
+            self.Error(f"Error on shouldSell: {str(e)}")
             return False, None  # Return None if symbol is not in data or data[symbol] is None
+        
     except Exception as e:
-        self.Debug(f"Error on shouldSell: {str(e)}")
+        self.Error(f"Error on shouldSell: {str(e)}")
         return False

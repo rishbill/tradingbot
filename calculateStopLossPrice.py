@@ -18,7 +18,7 @@ def calculateStopLossPrice(self, symbol, data):
             v.stop_loss_trailing_price[symbol] = v.current_price[symbol] * (1 - c.sell_parameter_stop_loss_trailing_percent) if c.sell_condition_stop_loss_trailing_percent else 0
                 # Trailing-Based Stop Loss Price: Price to sell share at a determined price when it drops x% from the stock's highest price since purchase.
             
-            v.stop_loss_percent_price = v.current_price[symbol] * (1 - c.sell_condition_stop_loss_percent) if c.sell_condition_stop_loss_percent else 0
+            v.stop_loss_percent_price[symbol] = v.current_price[symbol] * (1 - c.sell_condition_stop_loss_percent) if c.sell_condition_stop_loss_percent else 0
                 # Percentage-Based Stop Loss Price: Price to sell if position loss hits this fixed %. Good in case ATR or Trailing Stop Loss Prices fail or are to high, to avoid losing too much on the position.
 
             # Combining methods: Choose the largest of the three for the most highst conservative stop-loss.

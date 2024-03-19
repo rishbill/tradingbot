@@ -1,8 +1,8 @@
 from AlgorithmImports import *
 import config as c
 import variables as v
-import calculateStopLossPrice
-import calculateTakeProfitPrice
+from calculateStopLossPrice import calculateStopLossPrice
+from calculateTakeProfitPrice import calculateTakeProfitPrice
 import json
 
 def shouldBuy(self, symbol, data):

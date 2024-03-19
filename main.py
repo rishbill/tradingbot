@@ -5,8 +5,7 @@
 # Stocks = Symbols = Securities
 
 from AlgorithmImports import *
-from shouldBuy import *
-from shouldSell import *
+import variables as v
 import config as c
 from OnData import OnDataHandler
 from OnOrderEvent import OnOrderEventHandler
@@ -66,6 +65,8 @@ class CodysAdvancedStrategy(QCAlgorithm):
 
         # Add Universe
         self.AddUniverse(UniverseFilter)
+        self.Debug(f"Universe filtering complete. Number of stocks in the universe: {len(self.ActiveSecurities.Keys)}")
+
 
     def filterUniverseStocks(self, fundamental: List[Fundamental]) -> List[Symbol]:
     # Returns a filtered_stocks list of stocks,  dynamically re-filtered_stocks daily   
@@ -90,15 +91,8 @@ class CodysAdvancedStrategy(QCAlgorithm):
             # Sorting filtered stocks first by Dollar Volume, then by P/E Ratio
             stocks_sorted_by_dollar_volume = sorted(filtered_stocks, key=lambda f: f.DollarVolume, reverse=True)[:10]
             stocks_sorted_by_pe_ratio = sorted(stocks_sorted_by_dollar_volume, key=lambda f: f.ValuationRatios.PERatio, reverse=False)[:10]
-            
-            if v.warmup_counter >= c.warmup_period + 1:
-                try:
-                    v.active_stock_symbols = [(f.Symbol, f.Price, f.DollarVolume, f.ValuationRatios.PERatio, f.OperationRatios.RevenueGrowth.OneYear, f.MarketCap, f.AssetClassification.MorningstarSectorCode, f.AssetClassification.MorningstarIndustryCode, f.CompanyReference.ShortName) for f in stocks_sorted_by_pe_ratio]
-                except Exception as e:
-                    self.Debug(f"Error accessing fundamentals data: {str(e)}")
-            else:
-                self.Debug(f"Warming Up... ({v.warmup_counter} \ 100 Days)")
             return [f.Symbol for f in stocks_sorted_by_pe_ratio]
+         
         except Exception as e:
             self.Error(f"---- Error # Universe Filter on UniverseFilter: {str(e)}")        
 
@@ -111,9 +105,22 @@ class CodysAdvancedStrategy(QCAlgorithm):
     def OnSecuritiesChanged(self, changes):
         self.onSecuritiesChangedHandler.OnSecuritiesChanged(changes)
 
-    def OnWarmupFinished(self):
-        self.Debug(f"Warmup Finished. Universe includes {len(v.active_stock_symbols)} symbols.")
-        for symbol, price, dollar_volume, pe_ratio, revenue_growth, market_cap, sector, industry, ShortName in v.active_stock_symbols:
-            self.Debug(f"-------- {symbol}, Price: ${price}, Dollar Volume: ${dollar_volume}, P/E Ratio:{pe_ratio}, Revenue Growth: {revenue_growth}%, MarketCap: {market_cap}, Sector: {sector}, Industry: {industry} - {ShortName}")
+def OnWarmupFinished(self):
+    self.Debug(f"Warmup Finished. Universe includes {len(self.ActiveSecurities)} symbols.")
+    for symbol in self.ActiveSecurities.Keys:
+        # Retrieve the stock data using the symbol
+        stock_data = self.Securities[symbol].Fundamentals
+        
+        # Extract the required attributes from the stock data
+        price = stock_data.Price
+        dollar_volume = stock_data.DollarVolume
+        pe_ratio = stock_data.ValuationRatios.PERatio
+        revenue_growth = stock_data.OperationRatios.RevenueGrowth.OneYear
+        market_cap = stock_data.MarketCap
+        sector = stock_data.AssetClassification.MorningstarSectorCode
+        industry = stock_data.AssetClassification.MorningstarIndustryCode
+        short_name = stock_data.CompanyReference.ShortName
+        
+        self.Debug(f"-------- {symbol}, Price: ${price}, Dollar Volume: ${dollar_volume}, P/E Ratio:{pe_ratio}, Revenue Growth: {revenue_growth}%, MarketCap: {market_cap}, Sector: {sector}, Industry: {industry} - {short_name}")
 
 # End main.py

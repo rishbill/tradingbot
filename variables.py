@@ -40,21 +40,19 @@ max_loss_risk_per_share = {}
 max_profit_reward_per_share = {}
 stop_loss_atr_price = {}
 stop_loss_fib_atr_price = {}
-stop_loss_fibonacci_prices = []
+stop_loss_fibonacci_prices = {}
 stop_loss_max_price = {}
 stop_loss_percent_price = {}
 stop_loss_trailing_price = {}
 take_profit_atr_price = {}
 take_profit_fib_atr_price = {}
-take_profit_fibonacci_prices = []
+take_profit_fibonacci_prices = {}
 take_profit_max_price = {}
 take_profit_percent_price = {}
 take_profit_trailing_price = {}
 
 # Stocks
-active_stock_symbols = []  # Stocks in filtered universe
 unique_portfolio_stocks = set()
-sector_allocation = {}
 unique_portfolio_sectors = set()
 symbol_history = {}
 lowest_price_30_days = {}
