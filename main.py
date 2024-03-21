@@ -10,6 +10,8 @@ import config as c
 from OnData import OnDataHandler
 from OnOrderEvent import OnOrderEventHandler
 from OnSecuritiesChanged import OnSecuritiesChangedHandler
+from shouldBuy import shouldBuy
+from shouldSell import shouldSell
 import numpy as np
 from sectorAnalysis import sectorAnalysis
 

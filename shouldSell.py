@@ -3,7 +3,7 @@ import config as c
 import variables as v
 import json
 
-def shouldSell(self, symbol, data):
+def shouldSell(algorithm, symbol, data):
     try:
         if symbol in data and data[symbol] is not None and hasattr(data[symbol], 'Price'): # Confirm this is a valid data point
             
@@ -20,9 +20,18 @@ def shouldSell(self, symbol, data):
             # Price Target Condition
             is_sell_condition_price_target_met = v.current_price[symbol] >= v.take_profit_max_price[symbol] or v.current_price[symbol] <= v.stop_loss_max_price[symbol]
             
-            # Technical Indicators
-            is_sell_condition_macd_cross_below_signal = v.macd.Current.Value < v.macd.Signal.Current.Value if c.sell_condition_macd_cross_below_signal else True
-            is_sell_condition_rsi_weak = v.rsi[symbol].Current.Value > c.sell_parameter_rsi_max_threshold if c.sell_condition_rsi_weak else True
+            # Technical Analysis            
+            indicators = v.indicators[symbol]
+
+            is_sell_condition_macd_cross_below_signal = (
+                indicators["macd"].Current.Value < indicators["macd"].Signal.Current.Value 
+                if c.sell_condition_macd_cross_below_signal and indicators["macd"].IsReady else True
+            )
+
+            is_sell_condition_rsi_weak = (
+                indicators["rsi"].Current.Value > c.sell_parameter_rsi_max_threshold 
+                if c.sell_condition_rsi_weak and indicators["rsi"].IsReady else True
+            )
 
             condition_details = {
                 "Conditions": {
@@ -42,12 +51,10 @@ def shouldSell(self, symbol, data):
                     "CurrentPrice": v.current_price[symbol],
                     "TakeProfitPrice": v.take_profit_max_price[symbol],
                     "StopLossPrice": v.stop_loss_max_price[symbol],
-                    "ShortEMA": v.short_ema,
-                    "LongEMA": v.long_ema,
-                    "ATR": v.atr[symbol],
-                    "MACDValue": v.macd.Current.Value,
-                    "MACDSignal": v.macd.Signal.Current.Value,
-                    "RSI": v.rsi
+                    "ATR": indicators["atr"].Current.Value,
+                    "MACDValue": indicators["macd"].Current.Value,
+                    "MACDSignal": indicators["macd"].Signal.Value,
+                    "RSI": indicators["rsi"].Current.Value
                 },
                 "Parameters": {
                     "SellConditionStopLossATRPriceEnabled": is_sell_condition_stop_loss_atr_price, 
@@ -62,7 +69,18 @@ def shouldSell(self, symbol, data):
                 }
             }
 
-            order_tag = json.dumps(condition_details)
+            # Convert Symbol objects to string representation
+            condition_details_json = {
+                "Symbol": str(symbol),
+                "Conditions": condition_details["Conditions"],
+                "UnderlyingValues": {
+                    key: value.to_dict() if isinstance(value, Symbol) else value
+                    for key, value in condition_details["UnderlyingValues"].items()
+                },
+                "Parameters": condition_details["Parameters"]
+            }
+
+            order_tag = json.dumps(condition_details_json)
 
             # Conditions
             if (
@@ -76,9 +94,9 @@ def shouldSell(self, symbol, data):
                 return False, None
 
         else:
-            self.Error(f"Error on shouldSell: {str(e)}")
+            algorithm.Error(f"Error on shouldSell: {str(e)}")
             return False, None  # Return None if symbol is not in data or data[symbol] is None
         
     except Exception as e:
-        self.Error(f"Error on shouldSell: {str(e)}")
+        algorithm.Error(f"Error on shouldSell: {str(e)}")
         return False

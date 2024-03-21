@@ -217,6 +217,8 @@ buy_parameter_limit_order_percent = 0.98
 buy_parameter_atr_breakout_level_multiplier = 1.5
     # Determines how far above the current price the breakout level should be set.
 
+buy_parameters_atr_low_period = 30
+
 buy_parameter_atr_periods = 14
     # Determines the period over which the Average True Range (ATR) is calculated. The 14-period ATR is a common choice for gauging market volatility.
 
@@ -248,7 +250,7 @@ buy_condition_kelly_criterion_position_size = True
 buy_condition_limit_order_percent = True
     # Attempt to place Buy orders at a discounted limit price instead of market price.
 
-buy_parameter_max_total_portfolio_invested_percent = 0.90
+buy_parameter_max_total_portfolio_invested_percent = 0.95
     # Max % of total portfolio value to be invested.
 
 buy_parameter_max_portfolio_percent_per_trade = 0.50

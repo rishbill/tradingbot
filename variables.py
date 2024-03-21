@@ -11,26 +11,9 @@ warmup_counter = 0  # Tracks warmup progress
 daily_transactions = {}  # Track daily buys and sells for each security
 current_date = {}
 
-# Technical Indicators
-     # Stores technical indicator data. Updates with each OnSecuritiesChanged and OnData slice.
-atr_data = {}
-ema_long_data = {}
-ema_short_data = {}
-macd_data = {}
-rsi_data = {}
-stochastic_rsi_data = {}
-
-    # Stores technical indicator data. Updates with each stock in OnData.
 current_price = {} 
 current_close_price = {}
-atr = {}
-short_ema = {}
-short_ema_previous = {}
-long_ema = {}
-long_ema_previous = {}
-rsi = {}
-stochastic_rsi = {}
-macd = {}
+indicators = {}
 
 # Buy Conditions
 buy_limit_price = {} # Updated with each OnData slice through shouldBuy.
@@ -66,7 +49,7 @@ max_stock_price = 0
 # Orders
 order_ticket = None
 open_order_tickets = {}
-position_size_share_qty_to_buy = 0
+position_size_share_qty_to_buy = {}
 latest_order_ticket = {}
 
 # Profit/Loss Sell Results
