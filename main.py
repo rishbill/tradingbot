@@ -24,6 +24,7 @@ class CodysAdvancedStrategy(QCAlgorithm):
         c.SetCash(self)
         c.SetWarmUp(self)
         c.SetBrokerageModel(self)
+        self.Settings.FreePortfolioValuePercentage = 1 - c.buy_parameter_max_total_portfolio_invested_percent if c.buy_condition_max_total_portfolio_invested_percent else 0.03
         self.EnableAutomaticIndicatorWarmUp = True
 
         self.onDataHandler = OnDataHandler(self)

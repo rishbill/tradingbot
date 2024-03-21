@@ -22,7 +22,7 @@ def SetCash(algorithm_instance):
 # Built-in QuantConnect method: SetWarmUp ensures time-based indicator data will be correct.
     # Period should be the max time needed by any of the indicators.
     # Resolution should be the finest level of detail out of all the indicators.
-warmup_period = 100
+warmup_period = 30
 def SetWarmUp(algorithm_instance):
     algorithm_instance.SetWarmUp(warmup_period, Resolution.Daily)
 
@@ -217,7 +217,7 @@ buy_parameter_limit_order_percent = 0.98
 buy_parameter_atr_breakout_level_multiplier = 1.5
     # Determines how far above the current price the breakout level should be set.
 
-buy_parameters_atr_low_period = 30
+buy_parameter_atr_low_period = 30
 
 buy_parameter_atr_periods = 14
     # Determines the period over which the Average True Range (ATR) is calculated. The 14-period ATR is a common choice for gauging market volatility.

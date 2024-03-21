@@ -44,7 +44,7 @@ class OnDataHandler:
                                 indicators["macd"].IsReady,
                                 indicators["rsi"].IsReady,
                                 indicators["sto"].IsReady,
-                                indicators["min30"].IsReady
+                                indicators["atrmin"].IsReady
                             ]):
 
                                 v.symbol_sector[symbol] = self.algorithm.Securities[symbol].Fundamentals.AssetClassification.MorningstarSectorCode

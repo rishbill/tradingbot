@@ -16,6 +16,7 @@ def calculateTakeProfitPrice(self, symbol, data):
             )
                 # ATR Multiplier-Based take profit Price: Price set by using the Average True Range value, a measure of market volatility, to determine a take profit level that adjusts with the asset's recent price fluctuations.
 
+            v.take_profit_fibonacci_prices[symbol] = [v.current_price[symbol] * (1 + level) for level in c.sell_parameter_take_profit_fibonacci_retracement_levels]
             v.take_profit_fib_atr_price[symbol] = (
                 min(v.take_profit_fibonacci_prices[symbol]) + indicators["atr"].Current.Value 
                 if c.sell_condition_take_profit_fibonacci_atr_price and indicators["atr"].IsReady else 0

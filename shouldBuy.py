@@ -67,7 +67,7 @@ def shouldBuy(algorithm, symbol, data):
 
             is_buy_condition_atr_breakout_level_reached = (
                 v.current_price[symbol] > (
-                    indicators["min30"].Current.Value + 
+                    indicators["atrmin"].Current.Value + 
                     (indicators["atr"].Current.Value * c.buy_parameter_atr_breakout_level_multiplier)
                 ) if c.buy_condition_atr_breakout_level_reached else True
             )
