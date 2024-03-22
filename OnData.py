@@ -19,11 +19,12 @@ class OnDataHandler:
             # Log warm-up progress every 10 iterations
             current_day = self.algorithm.Time.day
             if self.algorithm.IsWarmingUp:
-                if v.last_increment_day != current_day:
-                    v.warmup_counter += 1
-                    v.last_increment_day = current_day
-                    if v.warmup_counter % 10 == 0:
-                        self.algorithm.Debug(f"Warming Up... ({v.warmup_counter} \ {c.warmup_period} Days)")
+                pass
+                # if v.last_increment_day != current_day:
+                #     v.warmup_counter += 1
+                #     v.last_increment_day = current_day
+                #     if v.warmup_counter % 10 == 0:
+                #         self.algorithm.Debug(f"Warming Up... ({v.warmup_counter} \ {c.warmup_period})")
                     
             else:               
                 for symbol in self.algorithm.ActiveSecurities.Keys:
@@ -43,8 +44,7 @@ class OnDataHandler:
                                 indicators["emaLong"].IsReady,
                                 indicators["macd"].IsReady,
                                 indicators["rsi"].IsReady,
-                                indicators["sto"].IsReady,
-                                indicators["atrmin"].IsReady
+                                indicators["sto"].IsReady
                             ]):
 
                                 v.symbol_sector[symbol] = self.algorithm.Securities[symbol].Fundamentals.AssetClassification.MorningstarSectorCode

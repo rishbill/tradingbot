@@ -53,7 +53,7 @@ def shouldSell(algorithm, symbol, data):
                     "StopLossPrice": v.stop_loss_max_price[symbol],
                     "ATR": indicators["atr"].Current.Value,
                     "MACDValue": indicators["macd"].Current.Value,
-                    "MACDSignal": indicators["macd"].Signal.Value,
+                    "MACDSignal": indicators["macd"].Signal.Current.Value,
                     "RSI": indicators["rsi"].Current.Value
                 },
                 "Parameters": {

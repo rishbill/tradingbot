@@ -22,9 +22,9 @@ def SetCash(algorithm_instance):
 # Built-in QuantConnect method: SetWarmUp ensures time-based indicator data will be correct.
     # Period should be the max time needed by any of the indicators.
     # Resolution should be the finest level of detail out of all the indicators.
-warmup_period = 30
+warmup_period = 34560
 def SetWarmUp(algorithm_instance):
-    algorithm_instance.SetWarmUp(warmup_period, Resolution.Daily)
+    algorithm_instance.SetWarmUp(warmup_period, Resolution.Minute)
 
 # Built-in QuantConnect method: SetBrokerageModel to TD Ameritrade (they have 0 fees). Better simulates live trading results.
 def SetBrokerageModel(algorithm_instance):
@@ -116,7 +116,7 @@ stock_filter_parameter_whitelist = [
     # Set each condition to True or False to control which conditions the algorithm should consider before placing a Buy trade.
 # -----------------------------------------------------
     # Price Targets:
-buy_condition_limit_order_percent = True 
+buy_condition_limit_order_percent = False 
     # Submit buy orders at x% the asking price, to get the extra deal.
 
     # Technical Indicators
@@ -148,7 +148,7 @@ buy_condition_macd_cross_above_signal = False
         # Speed & Sensitivity: It's a bit slower and smoother compared to some other indicators, providing a broader view of the market trend.
         # How It's Calculated: By subtracting the 26-period EMA from the 12-period EMA (forming the MACD line) and then plotting a 9-period EMA of the MACD line (signal line).
 
-buy_condition_reward_risk_ratio = True
+buy_condition_reward_risk_ratio = False
     # Reward-Risk Ratio:
         # What It Is: The ratio compares the potential gain (reward) of a trade to its potential loss (risk).
         # What It Tells You: A higher ratio indicates a more favorable trade, where the potential gain outweighs the potential loss. A common benchmark is a ratio of at least 2:1 (twice as much reward as risk).
@@ -217,7 +217,7 @@ buy_parameter_limit_order_percent = 0.98
 buy_parameter_atr_breakout_level_multiplier = 1.5
     # Determines how far above the current price the breakout level should be set.
 
-buy_parameter_atr_low_period = 30
+buy_parameter_atr_low_period = 24
 
 buy_parameter_atr_periods = 14
     # Determines the period over which the Average True Range (ATR) is calculated. The 14-period ATR is a common choice for gauging market volatility.

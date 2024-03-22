@@ -14,6 +14,7 @@ current_date = {}
 current_price = {} 
 current_close_price = {}
 indicators = {}
+consolidators = {}
 
 # Buy Conditions
 buy_limit_price = {} # Updated with each OnData slice through shouldBuy.
@@ -38,7 +39,6 @@ take_profit_trailing_price = {}
 unique_portfolio_stocks = set()
 unique_portfolio_sectors = set()
 symbol_history = {}
-lowest_price_30_days = {}
 sector_portfolio_value = {}
 stock_counts_per_sector = {}
 symbol_sector = {}

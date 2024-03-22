@@ -65,12 +65,12 @@ def shouldBuy(algorithm, symbol, data):
             # Technical Analysis            
             indicators = v.indicators[symbol]
 
-            is_buy_condition_atr_breakout_level_reached = (
-                v.current_price[symbol] > (
-                    indicators["atrmin"].Current.Value + 
-                    (indicators["atr"].Current.Value * c.buy_parameter_atr_breakout_level_multiplier)
-                ) if c.buy_condition_atr_breakout_level_reached else True
-            )
+            # is_buy_condition_atr_breakout_level_reached = (
+            #     v.current_price[symbol] > (
+            #         indicators["atrmin"].Current.Value + 
+            #         (indicators["atr"].Current.Value * c.buy_parameter_atr_breakout_level_multiplier)
+            #     ) if c.buy_condition_atr_breakout_level_reached else True
+            # )
 
             is_buy_condition_ema_crossover = (
                 indicators["emaShort"].Current.Value > indicators["emaLong"].Current.Value 
@@ -118,7 +118,7 @@ def shouldBuy(algorithm, symbol, data):
 
             condition_details = {
                 "Conditions": {
-                    "ATRBreakoutLevelReached": is_buy_condition_atr_breakout_level_reached,
+                    # "ATRBreakoutLevelReached": is_buy_condition_atr_breakout_level_reached,
                     "EMACrossover": is_buy_condition_ema_crossover,
                     "EMADistanceWidening": is_buy_condition_ema_distance_widening,
                     "MACDCrossAboveSignal": is_buy_condition_macd_cross_above_signal,
@@ -172,8 +172,8 @@ def shouldBuy(algorithm, symbol, data):
 
             # For a Buy to occur, all conditions must be True if they are enabled.
             if (
-                is_buy_condition_atr_breakout_level_reached
-                and is_buy_condition_ema_crossover
+                # is_buy_condition_atr_breakout_level_reached
+                is_buy_condition_ema_crossover
                 and is_buy_condition_ema_distance_widening
                 and is_buy_condition_macd_cross_above_signal
                 and is_buy_condition_reward_risk_ratio

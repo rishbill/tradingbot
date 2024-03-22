@@ -39,7 +39,7 @@ class CodysAdvancedStrategy(QCAlgorithm):
         self.Debug(f"---- Initial Capital -------------------------- ${self.Portfolio.Cash}")
         self.Debug(f"---- Start Date ------------------------------- {self.StartDate}")
         self.Debug(f"---- End Date --------------------------------- {self.EndDate}")
-        self.Debug(f"---- Warm Up ---------------------------------- {c.warmup_period} Days")
+        self.Debug(f"---- Warm Up ---------------------------------- {c.warmup_period}")
         self.Debug("Indicator Variables:")
         self.Debug("---- Initialized Indicator Variables: self.ema_short, self.ema_long, self.atr, self.stochastic_rsi")
         self.Debug("News and Sentiment Variables:")
