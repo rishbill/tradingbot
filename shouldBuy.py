@@ -9,6 +9,8 @@ def shouldBuy(algorithm, symbol, data):
     try:
         if symbol in data and data[symbol] is not None and hasattr(data[symbol], 'Price'): # Confirm this is a valid data point
 
+            indicators = v.indicators.get(symbol, None)
+
             # Risk/Reward Analysis
             v.take_profit_max_price[symbol] = calculateTakeProfitPrice(algorithm, symbol, data)
                 # Calculate optimal Take Profit share price for this buy. 
@@ -33,89 +35,143 @@ def shouldBuy(algorithm, symbol, data):
                 # Throw error if risk/reward calculation problem.
             
             # Position Size Analysis
-            v.buy_limit_price[symbol] = v.current_close_price[symbol] * c.buy_parameter_limit_order_percent
-                # Calulate desired limit price for this buy.
+            v.buy_limit_price[symbol] = (
+                v.current_close_price[symbol]
+                * c.buy_parameter_limit_order_percent
+                if c.buy_condition_limit_order_percent else v.current_price[symbol]
+            ) # Calulate desired limit price for this buy if enabled, otherwise use market price.
 
-            position_size_cash_available_share_qty = algorithm.Portfolio.Cash / v.buy_limit_price[symbol]
-                # Calculate potential position size for this buy based on available cash - Simplest method, always enabled.
+            position_size_cash_available_share_qty = (
+                algorithm.Portfolio.Cash
+                / v.buy_limit_price[symbol]
+            ) # Calculate potential position size for this buy based on available cash.
+              # Simplest method, always enabled.
 
-            position_size_kelly_criterion_share_qty = ( algorithm.Portfolio.Cash * v.kelly_criterion ) / v.max_loss_risk_per_share[symbol] if c.buy_condition_kelly_criterion_position_size else 0
-                # Uses the win probability and win/loss ratio to determine the optimal fraction of capital to be used for each trade
+            position_size_kelly_criterion_share_qty = (
+                (algorithm.Portfolio.Cash * v.kelly_criterion)
+                / v.max_loss_risk_per_share[symbol] 
+                if c.buy_condition_kelly_criterion_position_size else 0
+            ) # Uses the win probability and win/loss ratio to determine
+              # the optimal fraction of capital to be used for each trade.
 
-            position_size_max_portfolio_percent_per_trade_share_qty = (algorithm.Portfolio.TotalPortfolioValue * c.buy_parameter_max_portfolio_percent_per_trade) / v.max_loss_risk_per_share[symbol] if c.buy_condition_max_portfolio_percent_per_trade else 0
-                # Calculate potential position size for this buy based on max portfolio percent of a single trade.
+            position_size_max_portfolio_percent_per_trade_share_qty = (
+                (algorithm.Portfolio.TotalPortfolioValue * c.buy_parameter_max_portfolio_percent_per_trade)
+                / v.max_loss_risk_per_share[symbol] 
+                if c.buy_condition_max_portfolio_percent_per_trade else 0
+            ) # Calculate potential position size for this buy based on max portfolio percent of a single trade.
             
-            position_size_max_total_portfolio_invested_percent_share_qty = (algorithm.Portfolio.TotalPortfolioValue * c.buy_parameter_max_total_portfolio_invested_percent) / v.max_loss_risk_per_share[symbol] if c.buy_condition_max_total_portfolio_invested_percent else 0
-                # Calculate potential position size for this buy based on percent of total invested portfolio value.
+            position_size_max_total_portfolio_invested_percent_share_qty = (
+                (algorithm.Portfolio.TotalPortfolioValue * c.buy_parameter_max_total_portfolio_invested_percent) 
+                / v.max_loss_risk_per_share[symbol] 
+                if c.buy_condition_max_total_portfolio_invested_percent else 0
+            ) # Calculate potential position size for this buy based on
+              # percent of total invested portfolio value.
 
             v.position_size_share_qty_to_buy[symbol] = round(min(
                 position_size_max_portfolio_percent_per_trade_share_qty,
                 position_size_max_total_portfolio_invested_percent_share_qty,
                 position_size_cash_available_share_qty,
                 position_size_kelly_criterion_share_qty
-            ))
-                # Use the lesser of the 4 potential position sizes.
-                        
-            max_loss_risk_per_trade = v.max_loss_risk_per_share[symbol] * v.position_size_share_qty_to_buy[symbol]
-                # Calculate max potential loss for this trade.
+            )) # Use the lesser of the 4 potential position sizes.
             
-            is_buy_condition_max_sector_invested_percent = v.portfolio_percent_per_sector[symbol] < c.buy_parameter_max_sector_invested_percent if symbol in v.portfolio_percent_per_sector and c.buy_condition_max_sector_invested_percent else True            
-                # Check if the symbol's sector is the max sector and if its percentage is less than the parameter
+            plotPositionSizes(algorithm, symbol)
+
+            max_loss_risk_per_trade = (
+                v.max_loss_risk_per_share[symbol] * v.position_size_share_qty_to_buy[symbol]
+            ) # Calculate max potential loss for this trade.
+
+            is_buy_condition_limit_order_percent = (
+                True if c.buy_condition_limit_order_percent else "Disabled"
+            )
+
+            is_buy_condition_kelly_criterion_position_size = (
+                position_size_kelly_criterion_share_qty == v.position_size_share_qty_to_buy[symbol]
+                if c.buy_condition_kelly_criterion_position_size else "Disabled"
+            )         
+            
+            is_buy_condition_max_total_portfolio_invested_percent = (
+                max_loss_risk_per_trade < c.buy_parameter_max_total_portfolio_invested_percent 
+                * algorithm.Portfolio.TotalPortfolioValue 
+                if c.buy_condition_max_total_portfolio_invested_percent else "Disabled"
+            )
+
+            is_buy_condition_max_portfolio_percent_per_trade = (
+                max_loss_risk_per_trade < c.buy_parameter_max_portfolio_percent_per_trade 
+                * algorithm.Portfolio.TotalPortfolioValue 
+                if c.buy_condition_max_portfolio_percent_per_trade else "Disabled"
+            )
+
+            is_buy_condition_min_symbols_invested = (
+                len(v.unique_portfolio_symbols) < c.buy_parameter_min_symbols_invested 
+                if c.buy_condition_min_symbols_invested else "Disabled"
+            )
+
+            is_buy_condition_max_sector_invested_percent = (
+                v.portfolio_percent_per_sector[symbol] 
+                < c.buy_parameter_max_sector_invested_percent 
+                if symbol in v.portfolio_percent_per_sector 
+                and c.buy_condition_max_sector_invested_percent else "Disabled"
+            )
+
+            is_buy_condition_pdt_rule = (
+                len(v.day_trade_dates) >= 3 
+                and algorithm.Portfolio.Cash < 25000 
+                if c.buy_condition_pdt_rule else "Disabled"
+            )
+
+            is_buy_condition_max_sector_invested_percent = (
+                v.portfolio_percent_per_sector[symbol] < c.buy_parameter_max_sector_invested_percent 
+                if symbol in v.portfolio_percent_per_sector
+                and c.buy_condition_max_sector_invested_percent else "Disabled"
+            ) # Check if the symbol's sector is the max sector 
+              # and if its percentage is less than the parameter.
             
             # Technical Analysis            
-            indicators = v.indicators[symbol]
-
             # is_buy_condition_atr_breakout_level_reached = (
             #     v.current_price[symbol] > (
             #         indicators["atrmin"].Current.Value + 
             #         (indicators["atr"].Current.Value * c.buy_parameter_atr_breakout_level_multiplier)
-            #     ) if c.buy_condition_atr_breakout_level_reached else True
+            #     ) if c.buy_condition_atr_breakout_level_reached else "Disabled"
             # )
 
             is_buy_condition_ema_crossover = (
                 indicators["emaShort"].Current.Value > indicators["emaLong"].Current.Value 
-                if c.buy_condition_ema_crossover else True
+                if c.buy_condition_ema_crossover else "Disabled"
             )
 
             is_buy_condition_ema_distance_widening = (
                 (indicators["emaShort"].Current.Value - indicators["emaLong"].Current.Value) > 
                 (indicators["emaShort"].Previous.Value - indicators["emaLong"].Previous.Value)
-                if c.buy_condition_ema_distance_widening else True
+                if c.buy_condition_ema_distance_widening else "Disabled"
             )
 
             is_buy_condition_macd_cross_above_signal = (
                 indicators["macd"].Current.Value > indicators["macd"].Signal.Current.Value
-                if c.buy_condition_macd_cross_above_signal else True
+                if c.buy_condition_macd_cross_above_signal else "Disabled"
             )
 
             is_buy_condition_reward_risk_ratio = (
                 (v.max_profit_reward_per_share[symbol] / v.max_loss_risk_per_share[symbol]) >= c.buy_parameter_reward_risk_ratio 
-                if c.buy_condition_reward_risk_ratio else True
+                if c.buy_condition_reward_risk_ratio else "Disabled"
             )
 
             is_buy_condition_rsi_strong = (
                 v.rsi.get(symbol, 0) > c.buy_parameter_rsi_min_threshold 
-                if c.buy_condition_rsi_strong else True
+                if c.buy_condition_rsi_strong else "Disabled"
             )
 
             is_buy_condition_short_ema_rising = (
                 indicators["emaShort"].Current.Value > indicators["emaShort"].Previous.Value
-                if c.buy_condition_short_ema_rising else True
+                if c.buy_condition_short_ema_rising else "Disabled"
             )
 
             is_buy_condition_stochastic_rsi_strong = (
                 indicators["sto"].Current.Value > c.buy_parameter_stochastic_rsi_min_threshold 
-                if c.buy_condition_stochastic_rsi_strong else True
+                if c.buy_condition_stochastic_rsi_strong else "Disabled"
             )
 
             # Diversification Parameters
-            is_buy_condition_max_total_portfolio_invested_percent = max_loss_risk_per_trade < c.buy_parameter_max_total_portfolio_invested_percent * algorithm.Portfolio.TotalPortfolioValue if c.buy_condition_max_total_portfolio_invested_percent else True
-            is_buy_condition_max_portfolio_percent_per_trade = max_loss_risk_per_trade < c.buy_parameter_max_portfolio_percent_per_trade * algorithm.Portfolio.TotalPortfolioValue if c.buy_condition_max_portfolio_percent_per_trade else True
-            is_buy_condition_min_stocks_invested = len(v.unique_portfolio_stocks) < c.buy_parameter_min_stocks_invested if c.buy_condition_min_stocks_invested else True
-            is_buy_condition_max_sector_invested_percent = v.portfolio_percent_per_sector[symbol] < c.buy_parameter_max_sector_invested_percent if symbol in v.portfolio_percent_per_sector and c.buy_condition_max_sector_invested_percent else True
-            is_buy_condition_pdt_rule = len(v.day_trade_dates) >= 3 and algorithm.Portfolio.Cash < 25000 if c.buy_condition_pdt_rule else True
-            is_buy_condition_lost_it_all = algorithm.Portfolio.TotalPortfolioValue < c.buy_parameter_lost_it_all if c.buy_condition_lost_it_all else True
-
+            
             condition_details = {
                 "Conditions": {
                     # "ATRBreakoutLevelReached": is_buy_condition_atr_breakout_level_reached,
@@ -128,10 +184,11 @@ def shouldBuy(algorithm, symbol, data):
                     "StochasticRSIStrong": is_buy_condition_stochastic_rsi_strong,
                     "MaxTotalPortfolioInvestedPercent": is_buy_condition_max_total_portfolio_invested_percent,
                     "MaxPortfolioPercentPerTrade": is_buy_condition_max_portfolio_percent_per_trade,
-                    "MinStocksInvested": is_buy_condition_min_stocks_invested,
+                    "MinSymbolsInvested": is_buy_condition_min_symbols_invested,
                     "MaxSectorInvestedPercent": is_buy_condition_max_sector_invested_percent,
                     "PDTRule": is_buy_condition_pdt_rule,
-                    "LostItAll": is_buy_condition_lost_it_all
+                    "BuyLimitOrderEnabled": is_buy_condition_limit_order_percent,
+                    "KellyCriterionPositionSize": is_buy_condition_kelly_criterion_position_size
                 },
                 "UnderlyingValues": {
                     "CurrentPrice": v.current_price[symbol],
@@ -173,19 +230,18 @@ def shouldBuy(algorithm, symbol, data):
             # For a Buy to occur, all conditions must be True if they are enabled.
             if (
                 # is_buy_condition_atr_breakout_level_reached
-                is_buy_condition_ema_crossover
-                and is_buy_condition_ema_distance_widening
-                and is_buy_condition_macd_cross_above_signal
-                and is_buy_condition_reward_risk_ratio
-                and is_buy_condition_rsi_strong
-                and is_buy_condition_short_ema_rising
-                and is_buy_condition_stochastic_rsi_strong
-                and is_buy_condition_max_total_portfolio_invested_percent
-                and is_buy_condition_max_portfolio_percent_per_trade
-                and is_buy_condition_min_stocks_invested
-                and is_buy_condition_max_sector_invested_percent
-                and is_buy_condition_pdt_rule
-                and is_buy_condition_lost_it_all
+                is_buy_condition_ema_crossover == True
+                and is_buy_condition_ema_distance_widening == True
+                and is_buy_condition_macd_cross_above_signal == True
+                and is_buy_condition_reward_risk_ratio == True
+                and is_buy_condition_rsi_strong == True
+                and is_buy_condition_short_ema_rising == True
+                and is_buy_condition_stochastic_rsi_strong == True
+                and is_buy_condition_max_total_portfolio_invested_percent == True
+                and is_buy_condition_max_portfolio_percent_per_trade == True
+                and is_buy_condition_min_symbols_invested == True
+                and is_buy_condition_max_sector_invested_percent == True
+                and is_buy_condition_pdt_rule == True
             ):  
                 return True, order_tag
 
@@ -198,3 +254,23 @@ def shouldBuy(algorithm, symbol, data):
     except Exception as e:
         algorithm.Error(f"Error on shouldBuy: {str(e)}") 
         return False
+
+def plotPositionSizes(algorithm, symbol):
+    cash_available = round(algorithm.Portfolio.Cash / v.buy_limit_price[symbol])
+    kelly_criterion = round((algorithm.Portfolio.Cash * v.kelly_criterion) / v.max_loss_risk_per_share[symbol])
+    max_portfolio_per_trade = round((algorithm.Portfolio.TotalPortfolioValue * c.buy_parameter_max_portfolio_percent_per_trade) / v.max_loss_risk_per_share[symbol])
+    max_total_portfolio = round((algorithm.Portfolio.TotalPortfolioValue * c.buy_parameter_max_total_portfolio_invested_percent) / v.max_loss_risk_per_share[symbol])
+
+    chart_name = f"{symbol} - Position Sizes"
+    chart = Chart(chart_name)
+    chart.AddSeries(Series("PS by Cash Available", SeriesType.Line, unit="Shares "))
+    chart.AddSeries(Series("PS by Kelly Criterion", SeriesType.Line, unit="Shares "))
+    chart.AddSeries(Series("PS by Per Trade Max", SeriesType.Line, unit="Shares "))
+    chart.AddSeries(Series("PS by Portfolio Max", SeriesType.Line, unit="Shares "))
+    
+    algorithm.AddChart(chart)
+
+    algorithm.Plot(chart_name, "PS by Cash Available", cash_available)
+    algorithm.Plot(chart_name, "PS by Kelly Criterion", kelly_criterion)
+    algorithm.Plot(chart_name, "PS by Per Trade Max", max_portfolio_per_trade)
+    algorithm.Plot(chart_name, "PS by Portfolio Max", max_total_portfolio)

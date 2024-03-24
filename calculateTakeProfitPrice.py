@@ -27,7 +27,7 @@ def calculateTakeProfitPrice(self, symbol, data):
                 v.current_price[symbol] * (1 + c.sell_parameter_take_profit_trailing_percent) 
                 if c.sell_condition_take_profit_trailing_percent else 0
             )
-                # Trailing-Based Take Profit Price: Price to sell share at a determined price when it drops x% from the stock's highest price since purchase.
+                # Trailing-Based Take Profit Price: Price to sell share at a determined price when it drops x% from the symbol's highest price since purchase.
 
             v.take_profit_percent_price[symbol] = (
                 v.current_price[symbol] * (1 + c.sell_parameter_take_profit_percent) 

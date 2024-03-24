@@ -5,92 +5,114 @@
 from AlgorithmImports import *
 # -----------------------------------------------------
 # Algorithm Initialization Parameters
+#    Basic details the algorithm needs to run.
 # -----------------------------------------------------
-# Built-in QuantConnect method: SetStartDate for historical backtest data.
 def SetStartDate(algorithm_instance):
     algorithm_instance.SetStartDate(2023, 10, 1) # Format: YYYY, M, D
+    # Built-in QuantConnect method: SetStartDate for historical backtest data.
 
-# Built-in QuantConnect method: SetEndDate for historical backtest data - defaults to current.
-# def SetEndDate(algorithm_instance):
-#     algorithm_instance.SetEndDate(2023, 10, 1) # Format: YYYY, M, D
-    
-# Built-in QuantConnect method: SetCash to the amount the algorithm starts with when backtesting. Cash is also called "Buying Power".
+def SetEndDate(algorithm_instance):
+    algorithm_instance.SetEndDate(2024, 3, 23) # Format: YYYY, M, D
+    # Built-in QuantConnect method: SetEndDate for historical backtest data - defaults to current.
+
 starting_cash = 1000
 def SetCash(algorithm_instance):
     algorithm_instance.SetCash(starting_cash)
+    # Built-in QuantConnect method: SetCash to the amount the algorithm starts with when backtesting. 
+    # Cash is also called "Buying Power".
 
-# Built-in QuantConnect method: SetWarmUp ensures time-based indicator data will be correct.
-    # Period should be the max time needed by any of the indicators.
-    # Resolution should be the finest level of detail out of all the indicators.
-warmup_period = 34560
+finest_resolution = Resolution.Daily
+    # Sets the finest time resolution for WarmUp, Universe OnData slices, and indicators.
+    # Can be set to lower resolution for faster backtest runs, for easier troubleshooting.
+
+warmup_period = 30
 def SetWarmUp(algorithm_instance):
-    algorithm_instance.SetWarmUp(warmup_period, Resolution.Minute)
+    algorithm_instance.SetWarmUp(warmup_period, finest_resolution)
+    # Built-in QuantConnect method: SetWarmUp ensures time-based indicator data will be correct.
+    # Period should be the max time needed by any of the indicators, at least 26 days,
+    # or the equivalent to 26 days in the resolution set by finest_resolution.
+    # Resolution should be the finest level of detail out of all the indicators.
 
-# Built-in QuantConnect method: SetBrokerageModel to TD Ameritrade (they have 0 fees). Better simulates live trading results.
 def SetBrokerageModel(algorithm_instance):
     algorithm_instance.SetBrokerageModel(BrokerageName.TradierBrokerage, AccountType.Cash)
-
-max_pending_order_age_minutes = 15 # Expire any pending (un-filled) submitted orders after this time (Only Limit Orders should be affected).
+    # Built-in QuantConnect method: SetBrokerageModel to Tradier (they have 0 fees). 
+    # Better simulates live trading results.
+    
+max_pending_order_age_minutes = 15
+    # Expire any pending (un-filled) submitted orders after this time.
+    # If the order went un-filled for too long, we lost the opportunity. 
+    # Only Limit Orders, not Market Orders, will be affected.
+# -----------------------------------------------------
 
 # -----------------------------------------------------
-# Stock Filtering Conditions:
+# Symbol Universe Filtering Conditions:
+#    Set each condition to True or False to control which symbols
+#    are added to the symbol Universe.
 # -----------------------------------------------------
-stock_filter_condition_min_price = True
-    # Minimum Stock Price Filter:
-        # What It Does: Excludes stocks priced below a certain threshold.
-        # Reasoning: Lower-priced stocks often come with higher volatility and risk, and may not meet certain exchange listing requirements, suggesting less stability.
+symbol_filter_condition_extended_market_hours = False
+    # Extended Market Hours:
+        # Allows OnData and trading for after hours.
+        # Reasoning: ???
 
-stock_filter_condition_max_stock_price_portfolio_percent = True
-    # Maximum Stock Price as Percentage of Portfolio Filter:
-        # What It Does: Limits the maximum price of a stock relative to the total portfolio value.
-        # Reasoning: Prevents overexposure to any single stock, ensuring diversification and risk management by avoiding too much allocation in high-priced stocks.
+symbol_filter_condition_min_price = True
+    # Minimum Symbol Price Filter:
+        # What It Does: Excludes symbols priced below a certain threshold.
+        # Reasoning: Lower-priced symbols often come with higher volatility and risk, 
+        # and may not meet certain exchange listing requirements, suggesting less stability.
 
-stock_filter_condition_min_pe_ratio = True
+symbol_filter_condition_max_symbol_price_portfolio_percent = True
+    # Maximum Symbol Price as Percentage of Portfolio Filter:
+        # What It Does: Limits the maximum price of a symbol relative to the total portfolio value.
+        # Reasoning: Prevents overexposure to any single symbol, ensuring diversification and risk management by avoiding too much allocation in high-priced symbols.
+
+symbol_filter_condition_min_pe_ratio = True
     # Minimum P/E Ratio Filter:
-        # What It Does: Filters out stocks with a P/E ratio below a certain level.
+        # What It Does: Filters out symbols with a P/E ratio below a certain level.
         # Reasoning: A minimum P/E ratio can help avoid companies with no or negative earnings, targeting firms with at least some level of profitability.
 
-stock_filter_condition_max_pe_ratio = True
+symbol_filter_condition_max_pe_ratio = True
     # Maximum P/E Ratio Filter:
-        # What It Does: Excludes stocks with a P/E ratio above a certain level.
-        # Reasoning: Aims to avoid overvalued stocks that might be priced too high relative to their earnings, reducing exposure to potential market corrections or bubbles.
+        # What It Does: Excludes symbols with a P/E ratio above a certain level.
+        # Reasoning: Aims to avoid overvalued symbols that might be priced too high relative to their earnings, reducing exposure to potential market corrections or bubbles.
 
-stock_filter_condition_min_revenue_growth_percent = True
+symbol_filter_condition_min_revenue_growth_percent = True
     # Minimum Revenue Growth Percentage Filter:
         # What It Does: Focuses on companies with a minimum threshold of revenue growth.
-        # Reasoning: Identifies companies showing signs of growth and financial health, suggesting potential for future profitability and stock price appreciation.
+        # Reasoning: Identifies companies showing signs of growth and financial health, suggesting potential for future profitability and symbol price appreciation.
 
-stock_filter_condition_blacklist = False
+symbol_filter_condition_blacklist = False
     # Blacklist Filter:
-        # What It Does: Excludes specific stocks or sectors based on predetermined criteria.
-        # Reasoning: Allows exclusion of stocks or sectors based on individual or strategic preferences, such as avoiding industries or companies with ethical concerns or poor performance history.
+        # What It Does: Excludes specific symbols or sectors based on predetermined criteria.
+        # Reasoning: Allows exclusion of symbols or sectors based on individual or strategic preferences, such as avoiding industries or companies with ethical concerns or poor performance history.
 
-stock_filter_condition_whitelist = False
+symbol_filter_condition_static_universe = True
     # Whitelist Filter:
-        # What It Does: Opts for a static, unchanging stock universe instead of dynamic.
-        # Reasoning: Allows exclusion of stocks or sectors based on individual or strategic preferences, such as avoiding industries or companies with ethical concerns or poor performance history.
+        # What It Does: Opts for a static, unchanging symbol universe instead of dynamic.
+        # Reasoning: Allows exclusion of symbols or sectors based on individual or strategic preferences, such as avoiding industries or companies with ethical concerns or poor performance history.
+# -----------------------------------------------------
 
 # -----------------------------------------------------
-# Stock Filtering Parameters:
-    # Control what stocks can be traded on a given trading day, if their conditions are enabled above.
-# -----------------------------------------------------
-stock_filter_parameter_min_price = 3.00
-    # Require stock to be at least this price to limit risk.
+# Symbol Universe Filtering Parameters:
+#     Control what symbols can be traded on a given trading day, if their conditions are enabled above.
+#
+symbol_filter_parameter_min_price = 3.00
+    # Require symbol to be at least this price to limit risk.
 
-stock_filter_parameter_max_stock_price_portfolio_percent = 0.10
-    # Limit max stock price to X% of portfolio size for affordability and diversification.
+symbol_filter_parameter_max_symbol_price_portfolio_percent = 0.10
+    # Limit max symbol price to X% of portfolio size for affordability and diversification.
 
-stock_filter_parameter_min_pe_ratio = 0
-    # Require stock to have positive Profit to Earnings Ratio.
+symbol_filter_parameter_min_pe_ratio = 0
+    # Require symbol to have positive Profit to Earnings Ratio.
 
-stock_filter_parameter_max_pe_ratio = 20
-    # Require stock to not be overvalued / overbought.
+symbol_filter_parameter_max_pe_ratio = 20
+    # Require symbol to not be overvalued / overbought.
     
-stock_filter_parameter_min_revenue_growth_percent = 0
-    # Require stock to have positive Revenue Growth for past year.
+symbol_filter_parameter_min_revenue_growth_percent = 0
+    # Require symbol to have positive Revenue Growth for past year.
 
-    # List of stock symbols we don't want to trade due to ethics or other reasons.
-stock_filter_parameter_blacklist = [
+    # If dynamic universe is selected,
+    # List of symbol we don't want to trade due to ethics or other reasons.
+symbol_filter_parameter_blacklist = [
     "CMCSA",  # Comcast Corporation
     "VZ",     # Verizon Communications Inc.
     "NSRGY",  # Nestlé S.A.
@@ -106,20 +128,29 @@ stock_filter_parameter_blacklist = [
     "DB",     # Deutsche Bank AG
     "TMUS",   # T-Mobile US, Inc.
 ]
-    # List of stock symbols to use for a static universe instead of dynamic.
-stock_filter_parameter_whitelist = [
+
+    # List of symbol symbols to use for a static universe instead of dynamic.
+symbol_filter_parameter_static_universe = [
     "TSLA",  # Tesla
 ]
+# -----------------------------------------------------
 
 # -----------------------------------------------------
-# Buy Conditions - Enable\Disable:
-    # Set each condition to True or False to control which conditions the algorithm should consider before placing a Buy trade.
+# BUY CONDITIONS - Enable\Disable:
+#    Set each condition to True or False to control which conditions 
+#    the algorithm should consider before placing a Buy trade.
 # -----------------------------------------------------
-    # Price Targets:
+
+# -----------------------------------------------------
+#     Buy Conditions - Price Targets:
+#
 buy_condition_limit_order_percent = False 
     # Submit buy orders at x% the asking price, to get the extra deal.
+# -----------------------------------------------------
 
-    # Technical Indicators
+# -----------------------------------------------------
+#     Buy Conditions - Technical Indicators:
+#
 buy_condition_atr_breakout_level_reached = False
     # ATR Breakout Level:
         # What It Is: Uses the Average True Range (ATR) to determine a volatility-based price level above the current price. The ATR measures market volatility by calculating the average range between high and low prices.
@@ -162,7 +193,7 @@ buy_condition_rsi_strong = False
         # What It Is: RSI measures the magnitude of recent price changes to evaluate overbought or oversold conditions.
         # What It Tells You: An RSI reading above a certain threshold (like 70) indicates a strong upward price movement (potentially overbought), while below a threshold (like 30) suggests a strong downward movement (potentially oversold).
         # Speed & Sensitivity: It's moderately responsive, providing insights into the overall strength of the current price trend.
-        # How It's Calculated: By analyzing the average gains and average losses over a specified period (commonly 14 days) to produce a value between 0 and 100. This value indicates if a stock is potentially overbought (above 70) or oversold (below 30).
+        # How It's Calculated: By analyzing the average gains and average losses over a specified period (commonly 14 days) to produce a value between 0 and 100. This value indicates if a symbol is potentially overbought (above 70) or oversold (below 30).
 
 buy_condition_short_ema_rising = False
     # Short-Term EMA Rising:
@@ -177,47 +208,54 @@ buy_condition_stochastic_rsi_strong = False
         # What It Tells You: It identifies overbought or oversold conditions more sensitively than the standard RSI.
         # Speed & Sensitivity: It's highly sensitive and reacts quickly to price movements, making it useful for spotting short-term trend reversals.
         # How It's Calculated: By taking the RSI value and plotting it on a scale of 0 to 100, considering its high and low values over a specific period. It's a measure of the RSI's relative level to its range.
+# -----------------------------------------------------
 
 # -----------------------------------------------------
-    # Diversification Conditions - Enable\Disable:
-# -----------------------------------------------------
-buy_condition_limit_order_percent = True
+#     Buy Conditions - Diversification & Position Sizing:
+#         # *Also see Symbol Universe Filtering Conditions.
+buy_condition_limit_order_percent = False
     # Attempt to place Buy orders at a discounted limit price instead of market price.
 
-buy_condition_max_portfolio_percent_per_trade = True
+buy_condition_max_portfolio_percent_per_trade = False
     # Max % of portfolio to spend on a single trade.
 
-buy_condition_max_total_portfolio_invested_percent = True
+buy_condition_max_total_portfolio_invested_percent = False
     # Max % of total portfolio value to be invested.
 
-buy_condition_min_stocks_invested = True
-    # Min unique stocks that must be in the portfolio.
+buy_condition_min_symbols_invested = False
+    # Min unique symbols that must be in the portfolio.
 
-buy_condition_max_sector_invested_percent = True
+buy_condition_max_sector_invested_percent = False
     # Maximum portfolio percent for a single sector.
 
-buy_condition_pdt_rule = True
+if not finest_resolution == Resolution.Daily:
+    buy_condition_pdt_rule = False
+else:
+    buy_condition_pdt_rule = False
     # Follow the Pattern Day Trader law to restrict trades if 4 day trades are made in a 5 business day period on a margin account under $25,000. 
-
-buy_condition_lost_it_all = True
-    # Block Buys if the total portfolio value < $X - This is bad and means the algo failed completely.
-
-buy_condition_min_cash = True
-    # Block Buys if portfolio cash aka "Buying Power" < $X
+# -----------------------------------------------------
 
 # -----------------------------------------------------
-# Buy Conditions Parameters:
-    # Control what values the algorithm uses for buy signals, if their conditions are enabled above.
+# BUY PARAMETERS
+#     Control what values the algorithm uses for buy signals, 
+#     if their conditions are enabled above.
 # -----------------------------------------------------
-    # Price Targets:
+    
+# -----------------------------------------------------
+#     Buy Parameters - Price Targets:
+#
 buy_parameter_limit_order_percent = 0.98
     # Submit buy orders at x% the asking price, to get the extra deal.
+# -----------------------------------------------------
 
-    # Technical Indicators
+# -----------------------------------------------------
+#     Buy Parameters - Technical Indicators
+#
 buy_parameter_atr_breakout_level_multiplier = 1.5
     # Determines how far above the current price the breakout level should be set.
 
 buy_parameter_atr_low_period = 24
+    # Determines the period for identifying a "Low" price for ATR breakout level indicator.
 
 buy_parameter_atr_periods = 14
     # Determines the period over which the Average True Range (ATR) is calculated. The 14-period ATR is a common choice for gauging market volatility.
@@ -242,8 +280,11 @@ buy_parameter_stochastic_rsi_periods = 14
 
 buy_parameter_stochastic_rsi_min_threshold = 0.5
     # The lower bound for Stochastic RSI to be seen as bullish. A value above 0.5 (in a range from 0 to 1) typically indicates increasing momentum.
-    
-    # Diversification \ Position Sizing Parameters:
+# -----------------------------------------------------
+
+# -----------------------------------------------------
+#    Buy Parameters - Diversification & Position Sizing:
+#
 buy_condition_kelly_criterion_position_size = True
     # Uses the win probability and win/loss ratio to determine the optimal fraction of capital to be used for each trade
 
@@ -256,8 +297,8 @@ buy_parameter_max_total_portfolio_invested_percent = 0.95
 buy_parameter_max_portfolio_percent_per_trade = 0.50
     # Max % of portfolio to spend on a single trade.
 
-buy_parameter_min_stocks_invested = 5
-    # Min unique stocks that must be in the portfolio.
+buy_parameter_min_symbols_invested = 5
+    # Min unique symbols that must be in the portfolio.
 
 buy_parameter_max_sector_invested_percent = 0.65
     # Maximum portfolio percent for a single sector.
@@ -266,11 +307,13 @@ buy_parameter_lost_it_all = 50
     # Minimum portfolio value to Buy.
 
 # -----------------------------------------------------
-# Sell Conditions - Enable\Disable:
+# SELL CONDITIONS - Enable\Disable
     # Set each condition to True or False to control which conditions the algorithm should consider before placing a Sell trade.
 # -----------------------------------------------------
-    
-    # Price Targets:
+
+# -----------------------------------------------------
+#     Sell Conditions - Price Targets:
+#
 sell_condition_stop_loss_atr_price = True
     # An ATR Multiplier-based Stop Loss Price is set by using the Average True Range value, a measure of market volatility, to determine a stop loss level that adjusts with the asset's recent price fluctuations. 
 
@@ -281,7 +324,7 @@ sell_condition_stop_loss_percent = True
     # Stop Loss %: Sell if position loss hits this fixed %. Good in case ATR or Trailing Stop Loss Prices fail or are too high, to avoid losing too much on the position.
 
 sell_condition_stop_loss_trailing_percent = True
-    # Trailing Stop %: Sell share at a determined price when it drops x% from the stock's highest price since purchase.
+    # Trailing Stop %: Sell share at a determined price when it drops x% from the symbol's highest price since purchase.
 
 sell_condition_take_profit_atr_price = True
     # An ATR Multiplier-based Stop Loss Price is set by using the Average True Range value, a measure of market volatility, to determine a stop loss level that adjusts with the asset's recent price fluctuations. 
@@ -293,9 +336,12 @@ sell_condition_take_profit_percent = True
     # Take Profit Percent: Good for locking in profit when a "feel-good" profit level is reached i.e. "I at least want to beat SPY". Can be dynamically calculated by % of current price or profit.
 
 sell_condition_take_profit_trailing_percent = True
-    # Trailing Stop %: Sell share at a determined price when it drops x% from the stock's highest price since purchase.
+    # Trailing Stop %: Sell share at a determined price when it drops x% from the symbol's highest price since purchase.
+# -----------------------------------------------------
 
-    # Technical Indicators:
+# -----------------------------------------------------
+#     Sell Conditions = Technical Indicators:
+#
 sell_condition_macd_cross_below_signal = False
     # MACD (Moving Average Convergence Divergence):
         # What It Is: The MACD involves two lines: the MACD line (difference between two EMAs) and the signal line (an EMA of the MACD line).
@@ -308,13 +354,17 @@ sell_condition_rsi_weak = False
         # What It Is: RSI measures the magnitude of recent price changes to evaluate overbought or oversold conditions.
         # What It Tells You: An RSI reading above a certain threshold (like 70) indicates a strong upward price movement (potentially overbought), while below a threshold (like 30) suggests a strong downward movement (potentially oversold).
         # Speed & Sensitivity: It's moderately responsive, providing insights into the overall strength of the current price trend.
-        # How It's Calculated: By analyzing the average gains and average losses over a specified period (commonly 14 days) to produce a value between 0 and 100. This value indicates if a stock is potentially overbought (above 70) or oversold (below 30).
+        # How It's Calculated: By analyzing the average gains and average losses over a specified period (commonly 14 days) to produce a value between 0 and 100. This value indicates if a symbol is potentially overbought (above 70) or oversold (below 30).
+# -----------------------------------------------------
 
 # -----------------------------------------------------
-# Sell Conditions - Parameters:
+# SELL PARAMETERS
     # Control what values the algorithm uses for sell signals, if their conditions are enabled above.
 # -----------------------------------------------------
-    # Price Targets:
+
+# -----------------------------------------------------
+#     Sell Parameters - Price Targets:
+#
 sell_parameter_stop_loss_fibonacci_retracement_levels = [0.236, 0.382, 0.618] 
     # Fibonacci retracement levels to determine potential stop prices. These levels are based on the Fibonacci sequence, a well-known series in mathematics, and are commonly used in technical analysis as indicators of potential reversal points in an asset's price. Traders often observe these specific ratios (23.6%, 38.2%, 61.8%) for signs of price support or resistance
 
@@ -325,7 +375,7 @@ sell_parameter_stop_loss_price_atr_multiplier = 2
     # Modifies the ATR for increased aggressiveness / risk before triggering stop loss.
 
 sell_parameter_stop_loss_trailing_percent = 0.10 
-    # Sell share when it drops x% from the stock's highest price since purchase. "Highest" price could be a new peak (profit), or the original purchase price (loss).
+    # Sell share when it drops x% from the symbol's highest price since purchase. "Highest" price could be a new peak (profit), or the original purchase price (loss).
 
 sell_parameter_take_profit_fibonacci_retracement_levels = [0.236, 0.382, 0.618] 
     # Fibonacci retracement levels to determine potential stop prices. These levels are based on the Fibonacci sequence, a well-known series in mathematics, and are commonly used in technical analysis as indicators of potential reversal points in an asset's price. Traders often observe these specific ratios (23.6%, 38.2%, 61.8%) for signs of price support or resistance
@@ -340,9 +390,11 @@ sell_parameter_take_profit_price_atr_multiplier = 2
     # Modifies the ATR for increased aggressiveness / risk before triggering take profit.
 
 sell_parameter_take_profit_trailing_percent = 0.10
-    # Sell share when it drops x% from the stock's highest price since purchase. "Highest" price could be a new peak (profit), or the original purchase price (loss).
+    # Sell share when it drops x% from the symbol's highest price since purchase. "Highest" price could be a new peak (profit), or the original purchase price (loss).
 
-    # Technical Indicators:
+# -----------------------------------------------------
+#     Sell Parameters - Technical Indicators:
+#
 sell_parameter_atr_periods = 14 
     # Determines the period over which the Average True Range (ATR) is calculated. The 14-period ATR is a common choice for gauging market volatility.
 
@@ -351,5 +403,6 @@ sell_parameter_rsi_max_threshold = 30
 
 sell_parameter_rsi_periods = 14
     # Specifies the number of periods (days, hours, etc.) over which the RSI is calculated. Commonly set to 14 for standard RSI analysis.
+# -----------------------------------------------------
 
 # End config.py

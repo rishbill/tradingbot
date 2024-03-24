@@ -24,13 +24,13 @@ def shouldSell(algorithm, symbol, data):
             indicators = v.indicators[symbol]
 
             is_sell_condition_macd_cross_below_signal = (
-                indicators["macd"].Current.Value < indicators["macd"].Signal.Current.Value 
-                if c.sell_condition_macd_cross_below_signal and indicators["macd"].IsReady else True
+                (indicators["macd"].Current.Value < indicators["macd"].Signal.Current.Value)
+                if c.sell_condition_macd_cross_below_signal else True
             )
 
             is_sell_condition_rsi_weak = (
                 indicators["rsi"].Current.Value > c.sell_parameter_rsi_max_threshold 
-                if c.sell_condition_rsi_weak and indicators["rsi"].IsReady else True
+                if c.sell_condition_rsi_weak else True
             )
 
             condition_details = {
@@ -84,9 +84,9 @@ def shouldSell(algorithm, symbol, data):
 
             # Conditions
             if (
-                is_sell_condition_price_target_met
-                and is_sell_condition_macd_cross_below_signal
-                and is_sell_condition_rsi_weak
+                is_sell_condition_price_target_met == True
+                and is_sell_condition_macd_cross_below_signal == True
+                and is_sell_condition_rsi_weak == True
             ):
                 return True, order_tag
             

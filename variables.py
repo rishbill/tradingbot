@@ -7,7 +7,7 @@ import collections
 day_trade_counter = 0  # Counts day trades
 day_trade_dates = collections.deque(maxlen=5)  # Dates of last 5 day trades
 last_increment_day = None  # Last day warmup counter was incremented
-warmup_counter = 0  # Tracks warmup progress
+indicator_warmup_counter = {}  # Tracks warmup progress
 daily_transactions = {}  # Track daily buys and sells for each security
 current_date = {}
 
@@ -15,6 +15,7 @@ current_price = {}
 current_close_price = {}
 indicators = {}
 consolidators = {}
+position_size_chart = {}
 
 # Buy Conditions
 buy_limit_price = {} # Updated with each OnData slice through shouldBuy.
@@ -35,16 +36,16 @@ take_profit_max_price = {}
 take_profit_percent_price = {}
 take_profit_trailing_price = {}
 
-# Stocks
-unique_portfolio_stocks = set()
+# Symbols
+unique_portfolio_symbols = set()
 unique_portfolio_sectors = set()
 symbol_history = {}
 sector_portfolio_value = {}
-stock_counts_per_sector = {}
+symbol_counts_per_sector = {}
 symbol_sector = {}
 portfolio_percent_per_sector = {}
 biggest_portfolio_sector = {}
-max_stock_price = 0
+max_symbol_price = 0
 
 # Orders
 order_ticket = None

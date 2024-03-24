@@ -37,10 +37,10 @@ class OnOrderEventHandler:
                 v.biggest_portfolio_sector = max(v.portfolio_percent_per_sector, key=v.portfolio_percent_per_sector.get)
                     # Update sector with highest portfolio percentage.
 
-                v.unique_portfolio_stocks.clear()        
-                v.unique_portfolio_stocks = {s for s, holding in self.algorithm.Portfolio.items() if holding.Invested}
-                self.algorithm.Debug(f"Updated unique portfolio stocks: str({v.unique_portfolio_stocks})")
-                    # Update list of unique portfolio stocks.
+                v.unique_portfolio_symbols.clear()        
+                v.unique_portfolio_symbols = {s for s, holding in self.algorithm.Portfolio.items() if holding.Invested}
+                self.algorithm.Debug(f"Updated unique portfolio symbols: str({v.unique_portfolio_symbols})")
+                    # Update list of unique portfolio symbols.
 
                 # Update Day Trade Counter
                 if v.current_date != v.last_increment_day:
@@ -59,6 +59,12 @@ class OnOrderEventHandler:
                     v.day_trade_counter += 1
                     v.day_trade_dates.append(v.current_date)
                     # If both a buy trade and a sell trade were both detected today, count today's date as a day trading date.
+
+                v.max_symbol_price = (
+                    self.Portfolio.TotalPortfolioValue * c.symbol_filter_parameter_max_symbol_price_portfolio_percent
+                    if c.symbol_filter_condition_max_symbol_price_portfolio_percent 
+                    else 0.95 * self.Portfolio.TotalPortfolioValue
+                ) # Set max price of symbols in the universe to what's defined in config.py, if not then 95%.
 
                 if orderEvent.Direction == OrderDirection.Buy:
                     self.algorithm.Debug(f"---- BUY Order Filled: {symbol} - ID: {orderEvent.OrderId} - Qty: {fill_qty} * ${fill_price} = ${fill_qty * fill_price}")
