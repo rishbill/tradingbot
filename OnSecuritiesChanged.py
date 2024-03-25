@@ -14,12 +14,10 @@ class OnSecuritiesChangedHandler:
         try:
             for security in changes.AddedSecurities:
                 symbol = security.Symbol
-
-            if symbol not in v.indicators:
-                self.initializeIndicators(symbol)
-
-            for indicator_key, indicator in v.indicators[symbol].items():
-                self.registerConsolidator(symbol, c.finest_resolution, indicator, self.updateIndicator, indicator_key)
+                if symbol not in v.indicators:
+                    self.initializeIndicators(symbol)
+                    for indicator_key, indicator in v.indicators[symbol].items():
+                        self.registerConsolidator(symbol, c.finest_resolution, indicator, self.updateIndicator, indicator_key)
 
             for security in changes.RemovedSecurities:
                 symbol = security.Symbol
@@ -31,39 +29,32 @@ class OnSecuritiesChangedHandler:
     def updateIndicator(self, bar, indicator, indicator_key):
         try:
             if bar is not None:
-                # Determine if the indicator expects IndicatorDataPoint or TradeBar
-                if isinstance(indicator, IndicatorBase[IndicatorDataPoint]):
-                    # Create an IndicatorDataPoint for these indicators
-                    dataPoint = IndicatorDataPoint(bar.EndTime, bar.Close)
-                    indicator.Update(dataPoint)
-                    if self.algorithm.IsWarmingUp:
-                        if indicator_key not in v.indicator_warmup_counter:
-                            v.indicator_warmup_counter[indicator_key] = 0
-                        v.indicator_warmup_counter[indicator_key] += 1
-                        self.algorithm.Debug(f"{bar.EndTime} - {bar.Symbol} - Warming up IndicatorDataPoint {indicator_key}: {indicator.Current.Value} - Received {v.indicator_warmup_counter[indicator_key]} / {c.warmup_period} data points...")
+                try: 
+                    # Determine if the indicator expects IndicatorDataPoint or TradeBar
+                    if isinstance(indicator, IndicatorBase[IndicatorDataPoint]):
+                        # Create an IndicatorDataPoint for these indicators
+                        dataPoint = IndicatorDataPoint(bar.EndTime, bar.Close)
+                        indicator.Update(dataPoint)
                     else:
-                        v.indicator_warmup_counter[indicator_key] += 1
-                        self.algorithm.Debug(f"{bar.EndTime} - {bar.Symbol} - Updated IndicatorDataPoint {indicator_key}: {indicator.Current.Value} - Received {v.indicator_warmup_counter[indicator_key]} / {c.warmup_period} data points")
-                                
+                        indicator.Update(bar)
+                except Exception as e:
+                    self.algorithm.Error(f"Error on OnSecuritiesChanged: {str(e)}")
+
+                if self.algorithm.IsWarmingUp:
+                    if indicator_key not in v.indicator_warmup_counter:
+                        v.indicator_warmup_counter[indicator_key] = 0
+                    v.indicator_warmup_counter[indicator_key] += 1
+                    self.algorithm.Debug(f"{bar.EndTime} - {bar.Symbol} - Warming up IndicatorDataPoint {indicator_key}: {indicator.Current.Value} - Received {v.indicator_warmup_counter[indicator_key]} / {c.warmup_period} data points...")
                 else:
-                    # Use TradeBar directly for these indicators
-                    indicator.Update(bar)
-                    if self.algorithm.IsWarmingUp:
-                        if indicator_key not in v.indicator_warmup_counter:
-                            v.indicator_warmup_counter[indicator_key] = 0
-                        v.indicator_warmup_counter[indicator_key] += 1
-                        self.algorithm.Debug(f"{bar.EndTime} - {bar.Symbol} - Warming up IndicatorTradeBar {indicator_key}: {indicator.Current.Value} - Received {v.indicator_warmup_counter[indicator_key]} / {c.warmup_period} data points...")
-                    else:
-                        v.indicator_warmup_counter[indicator_key] += 1
-                        self.algorithm.Debug(f"{bar.EndTime} - {bar.Symbol} - Updated IndicatorTradeBar {indicator_key}: {indicator.Current.Value} - Received {v.indicator_warmup_counter[indicator_key]} / {c.warmup_period} data points")
-                
+                    v.indicator_warmup_counter[indicator_key] += 1
+                    self.algorithm.Debug(f"{bar.EndTime} - {bar.Symbol} - Updated IndicatorDataPoint {indicator_key}: {indicator.Current.Value} - Received {v.indicator_warmup_counter[indicator_key]} / {c.warmup_period} data points")
+                                            
             else:
                 self.algorithm.Debug(f"Skipping {indicator_key} update for {bar.Symbol} at {bar.EndTime} due to missing data.")
         
         except Exception as e:
             self.algorithm.Error(f"Error on OnSecuritiesChanged: {str(e)}")
             
-
     def initializeIndicators(self, symbol):
         # Initialize indicators
         self.algorithm.Debug(f"Initializing indicators for {symbol}...")

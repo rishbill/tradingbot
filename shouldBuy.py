@@ -4,6 +4,7 @@ import variables as v
 from calculateStopLossPrice import calculateStopLossPrice
 from calculateTakeProfitPrice import calculateTakeProfitPrice
 import json
+import charts
 
 def shouldBuy(algorithm, symbol, data):
     try:
@@ -74,7 +75,7 @@ def shouldBuy(algorithm, symbol, data):
                 position_size_kelly_criterion_share_qty
             )) # Use the lesser of the 4 potential position sizes.
             
-            plotPositionSizes(algorithm, symbol)
+            charts.plotPositionSizes(algorithm, symbol)
 
             max_loss_risk_per_trade = (
                 v.max_loss_risk_per_share[symbol] * v.position_size_share_qty_to_buy[symbol]
@@ -205,7 +206,7 @@ def shouldBuy(algorithm, symbol, data):
                 },
                 "Parameters": {
                     "LimitOrderPercent": c.buy_parameter_limit_order_percent,
-                    "ATRBreakoutMultiplier": c.buy_parameter_atr_breakout_level_multiplier,
+                    # "ATRBreakoutMultiplier": c.buy_parameter_atr_breakout_level_multiplier,
                     "MaxPortfolioPercentPerTrade": c.buy_parameter_max_portfolio_percent_per_trade,
                     "MaxTotalPortfolioInvestedPercent": c.buy_parameter_max_total_portfolio_invested_percent,
                     "RSIMinThreshold": c.buy_parameter_rsi_min_threshold,
@@ -254,23 +255,3 @@ def shouldBuy(algorithm, symbol, data):
     except Exception as e:
         algorithm.Error(f"Error on shouldBuy: {str(e)}") 
         return False
-
-def plotPositionSizes(algorithm, symbol):
-    cash_available = round(algorithm.Portfolio.Cash / v.buy_limit_price[symbol])
-    kelly_criterion = round((algorithm.Portfolio.Cash * v.kelly_criterion) / v.max_loss_risk_per_share[symbol])
-    max_portfolio_per_trade = round((algorithm.Portfolio.TotalPortfolioValue * c.buy_parameter_max_portfolio_percent_per_trade) / v.max_loss_risk_per_share[symbol])
-    max_total_portfolio = round((algorithm.Portfolio.TotalPortfolioValue * c.buy_parameter_max_total_portfolio_invested_percent) / v.max_loss_risk_per_share[symbol])
-
-    chart_name = f"{symbol} - Position Sizes"
-    chart = Chart(chart_name)
-    chart.AddSeries(Series("PS by Cash Available", SeriesType.Line, unit="Shares "))
-    chart.AddSeries(Series("PS by Kelly Criterion", SeriesType.Line, unit="Shares "))
-    chart.AddSeries(Series("PS by Per Trade Max", SeriesType.Line, unit="Shares "))
-    chart.AddSeries(Series("PS by Portfolio Max", SeriesType.Line, unit="Shares "))
-    
-    algorithm.AddChart(chart)
-
-    algorithm.Plot(chart_name, "PS by Cash Available", cash_available)
-    algorithm.Plot(chart_name, "PS by Kelly Criterion", kelly_criterion)
-    algorithm.Plot(chart_name, "PS by Per Trade Max", max_portfolio_per_trade)
-    algorithm.Plot(chart_name, "PS by Portfolio Max", max_total_portfolio)
