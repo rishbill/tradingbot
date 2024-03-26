@@ -127,13 +127,12 @@ def shouldBuy(algorithm, symbol, data):
             ) # Check if the symbol's sector is the max sector 
               # and if its percentage is less than the parameter.
             
-            # Technical Analysis            
-            # is_buy_condition_atr_breakout_level_reached = (
-            #     v.current_price[symbol] > (
-            #         indicators["atrmin"].Current.Value + 
-            #         (indicators["atr"].Current.Value * c.buy_parameter_atr_breakout_level_multiplier)
-            #     ) if c.buy_condition_atr_breakout_level_reached else "Disabled"
-            # )
+            is_buy_condition_atr_breakout_level_reached = (
+                v.current_price[symbol] > (
+                    indicators["atr_min"].Current.Value + 
+                    (indicators["atr"].Current.Value * c.buy_parameter_atr_breakout_level_multiplier)
+                ) if c.buy_condition_atr_breakout_level_reached else "Disabled"
+            )
 
             is_buy_condition_ema_crossover = (
                 indicators["emaShort"].Current.Value > indicators["emaLong"].Current.Value 
@@ -175,7 +174,7 @@ def shouldBuy(algorithm, symbol, data):
             
             condition_details = {
                 "Conditions": {
-                    # "ATRBreakoutLevelReached": is_buy_condition_atr_breakout_level_reached,
+                    "ATRBreakoutLevelReached": is_buy_condition_atr_breakout_level_reached,
                     "EMACrossover": is_buy_condition_ema_crossover,
                     "EMADistanceWidening": is_buy_condition_ema_distance_widening,
                     "MACDCrossAboveSignal": is_buy_condition_macd_cross_above_signal,
@@ -206,7 +205,7 @@ def shouldBuy(algorithm, symbol, data):
                 },
                 "Parameters": {
                     "LimitOrderPercent": c.buy_parameter_limit_order_percent,
-                    # "ATRBreakoutMultiplier": c.buy_parameter_atr_breakout_level_multiplier,
+                    "ATRBreakoutMultiplier": c.buy_parameter_atr_breakout_level_multiplier,
                     "MaxPortfolioPercentPerTrade": c.buy_parameter_max_portfolio_percent_per_trade,
                     "MaxTotalPortfolioInvestedPercent": c.buy_parameter_max_total_portfolio_invested_percent,
                     "RSIMinThreshold": c.buy_parameter_rsi_min_threshold,

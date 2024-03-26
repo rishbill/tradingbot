@@ -58,6 +58,7 @@ class OnSecuritiesChangedHandler:
     def initializeIndicators(self, symbol):
         # Initialize indicators
         self.algorithm.Debug(f"Initializing indicators for {symbol}...")
+        atr_min = Minimum(c.buy_parameter_atr_low_period)
         atr = AverageTrueRange(c.buy_parameter_atr_periods, MovingAverageType.Wilders)
         emaShort = ExponentialMovingAverage(c.buy_parameter_ema_short_periods)
         emaLong = ExponentialMovingAverage(c.buy_parameter_ema_long_periods)
@@ -67,6 +68,7 @@ class OnSecuritiesChangedHandler:
 
         # Store indicators
         v.indicators[symbol] = {
+            'atr_min': atr_min,
             'atr': atr,
             'emaShort': emaShort,
             'emaLong': emaLong,

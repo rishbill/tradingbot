@@ -28,6 +28,8 @@ class CodysAdvancedStrategy(QCAlgorithm):
         c.SetBrokerageModel(self)
             # Set Brokerage Model defined in config.py
 
+        self.SetBenchmark("SPY")
+
         self.Settings.FreePortfolioValuePercentage = (
             1 - c.buy_parameter_max_total_portfolio_invested_percent
             if c.buy_condition_max_total_portfolio_invested_percent
