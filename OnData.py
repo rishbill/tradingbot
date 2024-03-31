@@ -20,7 +20,7 @@ class OnDataHandler:
                 pass
                     
             else:               
-                for symbol in self.algorithm.ActiveSecurities.Keys:
+                for symbol in v.active_symbols:
                     if symbol in data:                        
                         bar = data[symbol]
                         if bar is not None and isinstance(bar, (TradeBar, QuoteBar)):

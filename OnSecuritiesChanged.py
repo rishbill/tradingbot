@@ -2,7 +2,6 @@
 from AlgorithmImports import *
 import config as c
 import variables as v
-from datetime import timedelta
 
 class OnSecuritiesChangedHandler:
     def __init__(self, algorithm):
@@ -12,16 +11,16 @@ class OnSecuritiesChangedHandler:
     # Runs whenever a symbol is added to the static or dynamic Universe.
 
         try:
-            for security in changes.AddedSecurities:
-                symbol = security.Symbol
-                if symbol not in v.indicators:
-                    self.initializeIndicators(symbol)
-                    for indicator_key, indicator in v.indicators[symbol].items():
-                        self.registerConsolidator(symbol, c.finest_resolution, indicator, self.updateIndicator, indicator_key)
+            for x in changes.AddedSecurities:
+                v.active_symbols.add(x.Symbol)
+                if x.Symbol not in v.indicators:
+                    self.initializeIndicators(x.Symbol)
+                    for indicator_key, indicator in v.indicators[x.Symbol].items():
+                        self.registerConsolidator(x.Symbol, c.finest_resolution, indicator, self.updateIndicator, indicator_key)
 
-            for security in changes.RemovedSecurities:
-                symbol = security.Symbol
-                self.removeConsolidators(symbol)
+            for x in changes.RemovedSecurities:
+                v.active_symbols.remove(x.Symbol)
+                self.removeConsolidators(x.Symbol)
 
         except Exception as e:
             self.algorithm.Error(f"Error on OnSecuritiesChanged: {str(e)}")

@@ -46,6 +46,7 @@ symbol_sector = {}
 portfolio_percent_per_sector = {}
 biggest_portfolio_sector = {}
 max_symbol_price = 0
+active_symbols = {}
 
 # Orders
 order_ticket = None
