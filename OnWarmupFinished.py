@@ -27,13 +27,6 @@ class OnWarmupFinishedHandler:
             industry = self.algorithm.Securities[symbol].Fundamentals.AssetClassification.MorningstarIndustryCode
             short_name = self.algorithm.Securities[symbol].Fundamentals.CompanyReference.ShortName
             
-            self.algorithm.Debug(f"-------- {symbol}, 
-                       Price: ${price}, 
-                       Dollar Volume: ${dollar_volume}, 
-                       P/E Ratio:{pe_ratio}, 
-                       Revenue Growth: {revenue_growth}%, 
-                       MarketCap: {market_cap}, 
-                       Sector: {sector}, 
-                       Industry: {industry} - {short_name}")
+            self.algorithm.Debug(f"-------- {symbol}, Price: ${price}, Dollar Volume: ${dollar_volume}, P/E Ratio:{pe_ratio}, Revenue Growth: {revenue_growth}%, MarketCap: {market_cap}, Sector: {sector}, Industry: {industry} - {short_name}")
 
 # End OnWarmupFinished.py

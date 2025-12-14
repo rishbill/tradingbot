@@ -15,38 +15,43 @@ class AddUniverseHandler:
         self.algorithm = algorithm
     
     def AddUniverse(self):
+
         # If c.symbol_filter_condition_static_universe == True,
         # create a Static Symbol Universe.
+        self.algorithm.Debug(f"Creating Universe...")
+        self.algorithm.Debug(f"---- Static Universe (c.symbol_filter_condition_static_universe) = {c.symbol_filter_condition_static_universe}")
         if c.symbol_filter_condition_static_universe == True: 
             for x in c.symbol_filter_parameter_static_universe:
-                self.AddEquity(x.Symbol, c.finest_resolution)
-                self.initializeIndicators(x.Symbol)
-                self.Debug(f"Static Universe Updated: +{x.Symbol}")
+                self.algorithm.AddEquity(x.Symbol, c.finest_resolution)
+                self.algorithm.initializeIndicators(x.Symbol)
+                self.algorithm.Debug(f"-------- Static Universe Updated: +{x.Symbol}")
 
         elif not c.symbol_filter_condition_static_universe: 
             # If c.symbol_filter_condition_static_universe not == True,
             # create a Dynamic Symbol Universe.
             
-            self.UniverseSettings.ExtendedMarketHours = (
+            self.algorithm.Debug(f"---- Extended Market Hours (c.symbol_filter_condition_extended_market_hours) = {c.symbol_filter_condition_extended_market_hours}")
+            self.algorithm.UniverseSettings.ExtendedMarketHours = (
                 c.symbol_filter_condition_extended_market_hours
             ) # Enable or disable Extended Market Hours for the Universe.
 
-            self.UniverseSettings.Resolution = c.finest_resolution
+            self.algorithm.Debug(f"---- Finest Resolution (c.finest_resolution) = {c.finest_resolution}")
+            self.algorithm.UniverseSettings.Resolution = c.finest_resolution
                 # Sets Universe resolution. OnData will run and receive a 
                 # data slice once per minute 
                 # with data for each symbol in the dynamic universe.
 
-            self.AddUniverse(lambda fundamental: self.filterAndSortUniverse(fundamental))
+            self.algorithm.AddUniverse(lambda fundamental: self.algorithm.filterAndSortUniverse(fundamental))
                 # Run the built-in AddUniverse based on defined filter filterAndSortUniverse.            
     
     def filterAndSortUniverse(self, fundamental: List[Fundamental]) -> List[Symbol]:
         # Filter and sort a dynamic universe based on various criteria
-
+        
         v.max_symbol_price = (
-            self.Portfolio.TotalPortfolioValue 
+            self.algorithm.Portfolio.TotalPortfolioValue 
             * c.symbol_filter_parameter_max_symbol_price_portfolio_percent
             if c.symbol_filter_condition_max_symbol_price_portfolio_percent 
-            else 0.95 * self.Portfolio.TotalPortfolioValue
+            else 0.95 * self.algorithm.Portfolio.TotalPortfolioValue
         ) # Set max price of symbols in the universe to what's defined in config.py, 
           # if not then 95%.
 
